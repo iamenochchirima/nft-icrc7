@@ -43,6 +43,10 @@ fn test_icrc37_approve_tokens() {
         create_default_metadata(),
     );
 
+    pic.advance_time(Duration::from_secs(1));
+    tick_n_blocks(pic, 5);
+    println!("mint_return: {:?}", mint_return);
+
     match mint_return {
         Ok(token_id) => {
             let current_time = pic.get_time().as_nanos_since_unix_epoch();
@@ -57,6 +61,8 @@ fn test_icrc37_approve_tokens() {
                 memo: None,
                 created_at_time: current_time,
             };
+
+            println!("approval_info: {:?}", approval_info);
 
             let approve_args = vec![icrc37::icrc37_approve_tokens::ApproveTokenArg {
                 token_id: token_id.clone(),
@@ -1718,6 +1724,8 @@ fn test_icrc37_approvals_reset_after_transfer_as_owner() {
 
     let nft_owner3 = random_principal();
 
+    println!("nft_owner1: {:?}", nft_owner1);
+
     // Mint a token for nft_owner1
     let mint_return = mint_nft(
         pic,
@@ -1732,6 +1740,8 @@ fn test_icrc37_approvals_reset_after_transfer_as_owner() {
 
     pic.advance_time(Duration::from_secs(1));
     tick_n_blocks(pic, 5);
+
+    println!("mint_return: {:?}", mint_return);
 
     match mint_return {
         Ok(token_id) => {
@@ -1754,9 +1764,13 @@ fn test_icrc37_approvals_reset_after_transfer_as_owner() {
                 approval_info: token_approval_info.clone(),
             }];
 
+            println!("token_approve_args: {:?}", token_approve_args);
+
             let token_approve_response =
                 icrc37_approve_tokens(pic, nft_owner1, collection_canister_id, &token_approve_args);
             assert!(token_approve_response.is_ok());
+
+            println!("token_approve_response: {:?}", token_approve_response);
 
             pic.advance_time(Duration::from_secs(1));
             tick_n_blocks(pic, 5);

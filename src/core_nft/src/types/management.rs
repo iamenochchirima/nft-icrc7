@@ -312,3 +312,23 @@ pub mod has_permission {
         DefaultError(String),
     }
 }
+
+pub mod migration_icrc3_add_transaction {
+    use super::*;
+    use bity_ic_icrc3::transaction::ICRC37TransactionData;
+    use bity_ic_icrc3::transaction::ICRC7TransactionData;
+
+    #[derive(CandidType, Serialize, Deserialize, Clone)]
+    pub enum TransactionType {
+        ICRC7(ICRC7TransactionData),
+        ICRC37(ICRC37TransactionData),
+    }
+
+    pub type Args = (u64, String, TransactionType);
+    pub type Response = Result<(), MigrationIcrc3AddTransactionError>;
+
+    #[derive(Serialize, Deserialize, CandidType, Debug)]
+    pub enum MigrationIcrc3AddTransactionError {
+        DefaultError(String),
+    }
+}

@@ -150,34 +150,20 @@ fn test_icrc3_get_blocks_after_multiple_operations() {
         }],
     );
 
+    println!("blocks: {:?}", blocks);
+
+    // All blocks should be available directly from the canister (no archiving)
     assert_eq!(blocks.log_length, Nat::from(5u64));
-    assert_eq!(blocks.archived_blocks.len(), 1);
-    assert_eq!(blocks.archived_blocks[0].args.len(), 1);
     assert_eq!(
-        blocks.archived_blocks[0].args[0],
-        GetBlocksRequest {
-            start: Nat::from(0u64),
-            length: Nat::from(5u64),
-        }
+        blocks.archived_blocks.len(),
+        0,
+        "No blocks should be archived"
     );
-
-    tick_n_blocks(pic, 5);
-
-    let archived_blocks = icrc3_get_blocks(
-        pic,
-        controller,
-        blocks.archived_blocks[0].callback.canister_id,
-        &vec![GetBlocksRequest {
-            start: Nat::from(0u64),
-            length: Nat::from(5u64),
-        }],
-    );
-
-    println!("archived_blocks: {:?}", archived_blocks);
+    assert_eq!(blocks.blocks.len(), 5, "Should have 5 mint blocks");
 
     // First 5 blocks should be 7mint transactions
     for i in 0..5 {
-        match &archived_blocks.blocks[i].block {
+        match &blocks.blocks[i].block {
             icrc_ledger_types::icrc::generic_value::ICRC3Value::Map(map) => {
                 assert_eq!(
                     map.get("btype"),
@@ -242,15 +228,45 @@ fn test_icrc3_get_blocks_after_multiple_operations() {
 
     println!("blocks: {:?}", blocks);
     // Should have 5 mint operations + 3 transfer operations = 8 blocks
+    // All blocks should be available directly (no archiving)
+    assert_eq!(
+        blocks.log_length,
+        Nat::from(8u64),
+        "Expected log_length of 8, got {}",
+        blocks.log_length
+    );
+    assert_eq!(
+        blocks.archived_blocks.len(),
+        0,
+        "No blocks should be archived, got {}",
+        blocks.archived_blocks.len()
+    );
     assert_eq!(
         blocks.blocks.len(),
-        3,
-        "Expected 3 blocks, got {}",
+        8,
+        "Expected 8 blocks (5 mints + 3 transfers), got {}",
         blocks.blocks.len()
     );
 
+    // First 5 blocks should be 7mint transactions
+    for i in 0..5 {
+        match &blocks.blocks[i].block {
+            icrc_ledger_types::icrc::generic_value::ICRC3Value::Map(map) => {
+                assert_eq!(
+                    map.get("btype"),
+                    Some(&icrc_ledger_types::icrc::generic_value::ICRC3Value::Text(
+                        "7mint".to_string()
+                    )),
+                    "Block {} is not a mint transaction",
+                    i
+                );
+            }
+            _ => panic!("Block {} is not a map", i),
+        }
+    }
+
     // Next 3 blocks should be 7xfer transactions
-    for i in 0..3 {
+    for i in 5..8 {
         match &blocks.blocks[i].block {
             icrc_ledger_types::icrc::generic_value::ICRC3Value::Map(map) => {
                 assert_eq!(
@@ -262,7 +278,7 @@ fn test_icrc3_get_blocks_after_multiple_operations() {
                     i
                 );
             }
-            _ => panic!("Block is not a map"),
+            _ => panic!("Block {} is not a map", i),
         }
     }
 }

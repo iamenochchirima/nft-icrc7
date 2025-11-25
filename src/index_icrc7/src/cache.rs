@@ -11,7 +11,7 @@ pub struct CacheEntry {
 }
 
 impl Storable for CacheEntry {
-    fn to_bytes(&self) -> Cow<[u8]> {
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
         let mut buffer = Vec::new();
         // Encode timestamp as u64 (8 bytes)
         buffer.extend_from_slice(&self.timestamp.to_le_bytes());
@@ -19,6 +19,16 @@ impl Storable for CacheEntry {
         let value_bytes = self.value.to_bytes();
         buffer.extend_from_slice(&value_bytes);
         Cow::Owned(buffer)
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        // Encode timestamp as u64 (8 bytes)
+        buffer.extend_from_slice(&self.timestamp.to_le_bytes());
+        // Encode the CustomValue
+        let value_bytes = self.value.into_bytes();
+        buffer.extend_from_slice(&value_bytes);
+        buffer
     }
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
@@ -68,16 +78,16 @@ pub fn try_get_value_with_timestamp(key: u64) -> Option<(u64, CustomValue)> {
 
 pub fn remove_all_values_older_than(timestamp: &u64) -> bool {
     __CACHE.with(|cache| {
-        cache
+        let keys_to_remove: Vec<_> = cache
             .borrow()
             .iter()
-            .filter(|(_, entry)| entry.timestamp < *timestamp)
-            .map(|(key, _)| key)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .for_each(|key| {
-                cache.borrow_mut().remove(&key);
-            });
+            .filter(|entry| entry.value().timestamp < *timestamp)
+            .map(|entry| entry.key().clone())
+            .collect();
+
+        for key in keys_to_remove {
+            cache.borrow_mut().remove(&key);
+        }
 
         true
     })
@@ -90,6 +100,7 @@ pub fn insert_value(key: u64, value: CustomValue) {
     __CACHE.with(|cache| cache.borrow_mut().insert(key, entry));
 }
 
+#[allow(unused)]
 pub fn remove_value(key: u64) {
     __CACHE.with(|cache| cache.borrow_mut().remove(&key));
 }

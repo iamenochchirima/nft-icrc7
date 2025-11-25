@@ -20,10 +20,16 @@ pub struct MetadataData {
 }
 
 impl Storable for MetadataData {
-    fn to_bytes(&self) -> Cow<[u8]> {
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
         let mut buffer = Vec::new();
         encode(self, &mut buffer).expect("failed to encode MetadataData");
         Cow::Owned(buffer)
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        encode(self, &mut buffer).expect("failed to encode MetadataData");
+        buffer
     }
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
@@ -165,7 +171,8 @@ impl Metadata {
                 Err(e) => return Err(e),
             }
         } else {
-            for (_, metadata_data) in self.data.iter() {
+            for entry in self.data.iter() {
+                let metadata_data = entry.value();
                 for (key, value) in metadata_data.data.iter() {
                     all_data.insert(key.clone(), value.clone());
                 }
@@ -179,8 +186,8 @@ impl Metadata {
         trace("Getting all nfts ids");
         let mut all_nfts_ids = Vec::new();
 
-        for (key, _) in self.data.iter() {
-            all_nfts_ids.push(key.0.clone());
+        for entry in self.data.iter() {
+            all_nfts_ids.push(entry.key().0.clone());
         }
 
         Ok(all_nfts_ids)

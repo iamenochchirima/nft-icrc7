@@ -8,7 +8,6 @@ use crate::{
 };
 use bity_ic_canister_time::{run_interval, DAY_IN_MS, MINUTE_IN_MS};
 
-const CACHE_CLEANUP_INTERVAL: u64 = DAY_IN_MS;
 const UPDATE_INDEX_INTERVAL: u64 = MINUTE_IN_MS;
 const BLOCK_BATCH_SIZE: u64 = 100;
 
@@ -48,7 +47,7 @@ async fn update_index() {
                     Ok(_) => {
                         last_block_id += 1;
                     }
-                    Err(e) => {
+                    Err(_) => {
                         break;
                     }
                 }

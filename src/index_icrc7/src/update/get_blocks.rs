@@ -65,7 +65,14 @@ async fn get_blocks_with_filters(
         result
     };
 
-    combined_block_ids.sort();
+    match sort_by {
+        SortBy::Ascending => {
+            combined_block_ids.sort();
+        }
+        SortBy::Descending => {
+            combined_block_ids.sort_by(|a, b| b.cmp(a));
+        }
+    }
 
     let start_idx = start as usize;
     let end_idx = (start + length) as usize;

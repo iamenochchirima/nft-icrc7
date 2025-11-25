@@ -29,7 +29,9 @@ core_nft                       = { path = "../src/core_nft"}
 index_icrc7                    = { path = "../src/index_icrc7"}
 ic-cdk                         = { workspace = true }
 reqwest                        = "0.12.23"
+# ic-agent                       = { version = "0.44.3"}
 ic-agent                       = { version = "0.40.1"}
+
 ic-http-gateway                = { version = "0.3.0"}
 http                           = "1.3.1"
 bytes                          = "1.10.1"

@@ -4,7 +4,7 @@ use bity_ic_types::{CanisterId, Milliseconds};
 use candid::{CandidType, Deserialize, Principal};
 use core_nft::init::InitArgs;
 use core_nft::lifecycle::Args;
-use pocket_ic::{PocketIc, PocketIcBuilder};
+use pocket_ic::{common::rest::BlobCompression, PocketIc, PocketIcBuilder};
 
 use std::time::Duration;
 

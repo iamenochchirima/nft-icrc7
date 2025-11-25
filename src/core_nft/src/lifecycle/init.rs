@@ -18,7 +18,6 @@ use ic_cdk_macros::init;
 use icrc_ledger_types::icrc3::blocks::SupportedBlockType;
 use serde::{Deserialize, Serialize};
 use tracing::info;
-
 #[derive(CandidType, Serialize, Deserialize, Debug)]
 pub struct InitArgs {
     pub test_mode: bool,
@@ -49,6 +48,7 @@ fn init(args: Args) {
     match args {
         Args::Init(init_args) => {
             info!("Init start.");
+
             let env = CanisterEnv::new(
                 init_args.test_mode,
                 init_args.version,
@@ -159,14 +159,14 @@ fn init(args: Args) {
                 ],
                 constants: ICRC3Properties::new(
                     _tx_window,
-                    10,
-                    6 * 1024 * 1024,
-                    2 * 1024 * 1024,
+                    100,
+                    1024 * 1024 * 1024,
+                    100_u64.into(),
                     5_000_000_000_000,
                     5_000_000_000_000,
                     25,
-                    Duration::from_secs(120),
-                    1000
+                    None,
+                    None,
                 ),
             };
 

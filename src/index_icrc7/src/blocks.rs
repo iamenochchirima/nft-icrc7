@@ -100,6 +100,7 @@ pub fn get_block_instance(block_type: &BlockType) -> Box<dyn TransactionDataExtr
     }
 }
 
+#[allow(unused)]
 pub trait BlockIndexer {
     fn should_index_by_timestamp(&self) -> bool;
     fn should_index_by_account(&self) -> bool;
@@ -112,6 +113,7 @@ pub trait TransactionDataExtractor {
     fn extract_accounts(&self, data: &ICRC3Value) -> Result<Vec<WrappedAccount>, String>;
     fn extract_token_id(&self, data: &ICRC3Value) -> Result<Option<WrappedNat>, String>;
 
+    #[allow(unused)]
     fn extract_block_type(&self, data: &ICRC3Value) -> Result<BlockType, String> {
         if let ICRC3Value::Map(map) = data {
             if let Some(ICRC3Value::Text(btype_str)) = map.get("btype") {
@@ -353,7 +355,7 @@ impl TransactionDataExtractor for TransferFromBlock {
         }
     }
 
-    fn extract_token_id(&self, data: &ICRC3Value) -> Result<Option<WrappedNat>, String> {
+    fn extract_token_id(&self, _data: &ICRC3Value) -> Result<Option<WrappedNat>, String> {
         return Ok(None);
     }
 }
@@ -412,7 +414,7 @@ impl TransactionDataExtractor for CollectionApproveBlock {
         }
     }
 
-    fn extract_token_id(&self, data: &ICRC3Value) -> Result<Option<WrappedNat>, String> {
+    fn extract_token_id(&self, _data: &ICRC3Value) -> Result<Option<WrappedNat>, String> {
         return Ok(None);
     }
 }
@@ -481,7 +483,7 @@ impl TransactionDataExtractor for RevokeCollectionBlock {
         }
     }
 
-    fn extract_token_id(&self, data: &ICRC3Value) -> Result<Option<WrappedNat>, String> {
+    fn extract_token_id(&self, _data: &ICRC3Value) -> Result<Option<WrappedNat>, String> {
         return Ok(None);
     }
 }
@@ -528,6 +530,7 @@ pub async fn get_all_blocks(
 
     // Fetch only uncached blocks from network
     let mut sorted_block_ids = uncached_block_ids.clone();
+
     sorted_block_ids.sort();
 
     let chunks = group_consecutive_block_ids(&sorted_block_ids);

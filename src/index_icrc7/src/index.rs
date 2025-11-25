@@ -56,6 +56,12 @@ impl Storable for IndexType {
         Cow::Owned(buffer)
     }
 
+    fn into_bytes(self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        minicbor::encode(self, &mut buffer).expect("failed to encode IndexType");
+        buffer
+    }
+
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
         minicbor::decode(&bytes).expect("failed to decode IndexType")
     }
@@ -67,6 +73,12 @@ impl Storable for IndexValue {
         let mut buffer = Vec::new();
         minicbor::encode(&self.0, &mut buffer).expect("failed to encode IndexValue");
         Cow::Owned(buffer)
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        minicbor::encode(&self.0, &mut buffer).expect("failed to encode IndexValue");
+        buffer
     }
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {

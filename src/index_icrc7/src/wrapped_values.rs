@@ -17,10 +17,16 @@ impl From<Nat> for WrappedNat {
 }
 
 impl Storable for WrappedNat {
-    fn to_bytes(&self) -> Cow<[u8]> {
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
         let mut buffer = Vec::new();
         minicbor::encode(self, &mut buffer).expect("failed to encode Nat");
         Cow::Owned(buffer)
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        minicbor::encode(self, &mut buffer).expect("failed to encode Nat");
+        buffer
     }
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
@@ -96,6 +102,12 @@ impl Storable for WrappedAccount {
         Cow::Owned(buffer)
     }
 
+    fn into_bytes(self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        minicbor::encode(self, &mut buffer).expect("failed to encode Account");
+        buffer
+    }
+
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
         minicbor::decode(&bytes).expect("failed to decode WrappedAccount")
     }
@@ -158,6 +170,12 @@ impl Storable for CustomValue {
         let mut buffer = Vec::new();
         minicbor::encode(self, &mut buffer).expect("failed to encode CustomValue");
         Cow::Owned(buffer)
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        minicbor::encode(self, &mut buffer).expect("failed to encode CustomValue");
+        buffer
     }
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {

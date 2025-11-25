@@ -7,6 +7,8 @@ use crate::types::nft;
 use crate::types::wrapped_types::{WrappedAccount, WrappedApprovalValue, WrappedNat};
 use crate::types::{__COLLECTION_APPROVALS, __TOKEN_APPROVALS};
 
+use crate::utils::trace;
+
 use bity_ic_icrc3::{
     transaction::{ICRC37Transaction, ICRC37TransactionData},
     types::Icrc3Error,
@@ -68,6 +70,8 @@ fn approve_token(
     current_time: u64,
 ) -> icrc37_approve_tokens::ApproveTokenResult {
     use icrc37_approve_tokens::{ApproveTokenError, ApproveTokenResult};
+
+    trace(&format!("approve_token: {:?}", arg));
 
     match guard_sliding_window(arg.token_id.clone()) {
         Ok(()) => {}
@@ -144,7 +148,10 @@ fn approve_token(
         memo: memo_clone.clone().map(|m| m.to_vec()),
     };
 
+    trace(&format!("approval before borrow: {:?}", approval));
+
     let would_exceed_max_approvals = __TOKEN_APPROVALS.with_borrow(|token_approvals| {
+        trace(&format!("token_approvals: "));
         token_approvals
             .get(&WrappedNat::from(arg.token_id.clone()))
             .is_some()
@@ -155,6 +162,11 @@ fn approve_token(
                 .len()
                 >= max_approvals_per_token
     });
+
+    trace(&format!(
+        "would_exceed_max_approvals: {:?}",
+        would_exceed_max_approvals
+    ));
 
     if would_exceed_max_approvals {
         return ApproveTokenResult::Err(ApproveTokenError::GenericError {

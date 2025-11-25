@@ -4,7 +4,7 @@ mod pre_upgrade;
 
 use bity_ic_types::BuildVersion;
 pub use candid::Principal;
-pub use init::*;
+// pub use init::*;
 
 use crate::jobs::start_job;
 use crate::state::{init_state, RuntimeState};

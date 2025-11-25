@@ -12,7 +12,7 @@ use crate::utils::{check_memo, trace};
 
 pub use crate::types::management::{
     cancel_upload, finalize_upload, get_user_permissions, grant_permission, has_permission,
-    init_upload, revoke_permission, store_chunk,
+    init_upload, migration_icrc3_add_transaction, revoke_permission, store_chunk,
 };
 pub use crate::types::permissions::Permission;
 use bity_ic_icrc3::transaction::{ICRC7Transaction, ICRC7TransactionData};

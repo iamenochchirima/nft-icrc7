@@ -9,10 +9,16 @@ use std::borrow::Cow;
 pub struct CustomValue(pub Value);
 
 impl Storable for CustomValue {
-    fn to_bytes(&self) -> Cow<[u8]> {
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
         let mut buffer = Vec::new();
         minicbor::encode(self, &mut buffer).expect("failed to encode CustomValue");
         Cow::Owned(buffer)
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        minicbor::encode(self, &mut buffer).expect("failed to encode CustomValue");
+        buffer
     }
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
