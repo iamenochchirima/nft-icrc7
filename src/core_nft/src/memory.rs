@@ -3,11 +3,11 @@ use ic_stable_structures::{
     DefaultMemoryImpl,
 };
 
-const UPGRADES: MemoryId = MemoryId::new(1);
+const UPGRADES: MemoryId = MemoryId::new(2);
 
-pub const TOKEN_APPROVALS: MemoryId = MemoryId::new(2);
-pub const COLLECTION_APPROVALS: MemoryId = MemoryId::new(3);
-pub const METADATA: MemoryId = MemoryId::new(4);
+pub const TOKEN_APPROVALS: MemoryId = MemoryId::new(3);
+pub const COLLECTION_APPROVALS: MemoryId = MemoryId::new(4);
+pub const METADATA: MemoryId = MemoryId::new(5);
 
 pub type VM = VirtualMemory<DefaultMemoryImpl>;
 
