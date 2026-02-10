@@ -14,7 +14,7 @@ use ic_http_gateway::{HttpGatewayClient, HttpGatewayRequestArgs};
 use icrc_ledger_types::icrc::generic_value::ICRC3Value;
 use icrc_ledger_types::icrc1::account::Account;
 use pocket_ic::PocketIc;
-use rand::{rng, RngCore};
+use rand::{rng, RngExt};
 use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{Read, Write};
@@ -25,8 +25,7 @@ use tempfile::NamedTempFile;
 use url::Url;
 
 pub fn random_principal() -> Principal {
-    let mut bytes = [0u8; 29];
-    rng().fill_bytes(&mut bytes);
+    let bytes: [u8; 29] = rng().random();
     Principal::from_slice(&bytes)
 }
 

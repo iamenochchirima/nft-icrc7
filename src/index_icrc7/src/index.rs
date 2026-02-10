@@ -9,7 +9,6 @@ use icrc_ledger_types::icrc3::blocks::BlockWithId;
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
-use std::collections::VecDeque;
 use std::str::FromStr;
 
 #[derive(
@@ -114,36 +113,36 @@ pub fn add_block_to_index(block: &BlockWithId) -> Result<(), String> {
 
         for account in &accounts {
             let account_key = IndexType::Account(account.clone());
-            let account_values = index_mut
+            let mut values = index_mut
                 .get(&account_key)
-                .map(|v| v.0.clone())
+                .map(|v| v.0)
                 .unwrap_or_default();
-            let mut d: VecDeque<_> = account_values.into();
-            d.push_front(block_id);
-            let account_values: Vec<_> = d.into();
-            index_mut.insert(account_key, IndexValue(account_values.clone()));
+            if !values.contains(&block_id) {
+                values.insert(0, block_id);
+                index_mut.insert(account_key, IndexValue(values));
+            }
         }
 
         let block_type_key = IndexType::BlockType(block_type.to_string());
-        let block_type_values = index_mut
+        let mut values = index_mut
             .get(&block_type_key)
-            .map(|v| v.0.clone())
+            .map(|v| v.0)
             .unwrap_or_default();
-        let mut d: VecDeque<_> = block_type_values.into();
-        d.push_front(block_id);
-        let block_type_values: Vec<_> = d.into();
-        index_mut.insert(block_type_key, IndexValue(block_type_values));
+        if !values.contains(&block_id) {
+            values.insert(0, block_id);
+            index_mut.insert(block_type_key, IndexValue(values));
+        }
 
         if let Some(token_id) = token_id {
             let token_id_key = IndexType::TokenId(token_id);
-            let token_id_values = index_mut
+            let mut values = index_mut
                 .get(&token_id_key)
-                .map(|v| v.0.clone())
+                .map(|v| v.0)
                 .unwrap_or_default();
-            let mut d: VecDeque<_> = token_id_values.into();
-            d.push_front(block_id);
-            let token_id_values: Vec<_> = d.into();
-            index_mut.insert(token_id_key, IndexValue(token_id_values));
+            if !values.contains(&block_id) {
+                values.insert(0, block_id);
+                index_mut.insert(token_id_key, IndexValue(values));
+            }
         }
     });
 

@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::time::Duration;
 
 use crate::{
@@ -10,6 +11,10 @@ use bity_ic_canister_time::{run_interval, DAY_IN_MS, MINUTE_IN_MS};
 
 const UPDATE_INDEX_INTERVAL: u64 = MINUTE_IN_MS;
 const BLOCK_BATCH_SIZE: u64 = 100;
+
+thread_local! {
+    static INDEX_UPDATE_IN_PROGRESS: Cell<bool> = const { Cell::new(false) };
+}
 
 pub fn start_job() {
     run_interval(Duration::from_millis(DAY_IN_MS), cleanup_cache_job);
@@ -30,6 +35,11 @@ async fn cleanup_cache() {
 }
 
 fn update_index_job() {
+    let already_running = INDEX_UPDATE_IN_PROGRESS.with(|f| f.get());
+    if already_running {
+        return;
+    }
+    INDEX_UPDATE_IN_PROGRESS.with(|f| f.set(true));
     ic_cdk::futures::spawn(update_index());
 }
 
@@ -61,4 +71,6 @@ async fn update_index() {
     mutate_state(|state| {
         state.data.last_block_id = last_block_id;
     });
+
+    INDEX_UPDATE_IN_PROGRESS.with(|f| f.set(false));
 }
