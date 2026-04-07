@@ -73,7 +73,7 @@ bity-ic-utils                   = "0.3.0"
 bity-ic-subcanister-manager     = "0.4.0"
 bity-ic-icrc3                   = "0.7.0"
 bity-ic-icrc3-macros            = "0.4.0" 
-bity-ic-storage-canister-c2c    = "0.3.0"
+bity-ic-storage-canister-c2c    = { path = "../ic-storage-canister/c2c" }
 bity-ic-icrc3-archive-c2c-client    = "0.4.0"
 bity-ic-icrc3-c2c-client    = "0.2.0"
-bity-ic-storage-canister-api = "0.3.0"
+bity-ic-storage-canister-api = { path = "../ic-storage-canister/api" }

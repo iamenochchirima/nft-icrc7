@@ -11,8 +11,9 @@ use crate::types::{icrc7, management, nft};
 use crate::utils::{check_memo, trace};
 
 pub use crate::types::management::{
-    cancel_upload, finalize_upload, get_user_permissions, grant_permission, has_permission,
-    init_upload, migration_icrc3_add_transaction, revoke_permission, store_chunk,
+    batch_finalize_upload, batch_init_upload, batch_store_chunks, cancel_upload, finalize_upload,
+    get_user_permissions, grant_permission, has_permission, init_upload,
+    migration_icrc3_add_transaction, revoke_permission, store_chunk,
 };
 pub use crate::types::permissions::Permission;
 use bity_ic_icrc3::transaction::{ICRC7Transaction, ICRC7TransactionData};
@@ -694,4 +695,162 @@ pub fn has_permission(args: has_permission::Args) -> has_permission::Response {
     });
 
     Ok(has_permission)
+}
+
+#[update(guard = "caller_has_update_uploads_permission")]
+pub async fn batch_init_upload(data: batch_init_upload::Args) -> batch_init_upload::Response {
+    let caller = ic_cdk::api::msg_caller();
+    let _guard_principal = GuardManagement::new(caller)
+        .map_err(|_| batch_init_upload::BatchInitUploadError::ConcurrentManagementCall)?;
+
+    let mut sub_canister_manager = read_state(|state| state.data.sub_canister_manager.clone());
+
+    let (resp, canister_id) = match sub_canister_manager.batch_init_upload(data.clone()).await {
+        Ok((resp, canister_id)) => (resp, canister_id),
+        Err(e) => {
+            return Err(batch_init_upload::BatchInitUploadError::StorageCanisterError(e));
+        }
+    };
+
+    for (idx, result) in resp.results.iter().enumerate() {
+        if result.is_ok() {
+            let file_data = &data.files[idx];
+            mutate_state(|state| {
+                state.data.sub_canister_manager = sub_canister_manager.clone();
+                state.internal_filestorage.insert(
+                    file_data.file_path.clone(),
+                    InternalFilestorageData {
+                        init_timestamp: ic_cdk::api::time(),
+                        state: UploadState::Init,
+                        canister: canister_id,
+                        path: file_data.file_path.clone(),
+                    },
+                );
+            });
+        }
+    }
+
+    Ok(resp)
+}
+
+#[update(guard = "caller_has_update_uploads_permission")]
+pub async fn batch_store_chunks(data: batch_store_chunks::Args) -> batch_store_chunks::Response {
+    let caller = ic_cdk::api::msg_caller();
+    let _guard_principal = GuardManagement::new(caller)
+        .map_err(|_| batch_store_chunks::BatchStoreChunksError::ConcurrentManagementCall)?;
+
+    if data.chunks.is_empty() {
+        return Ok(batch_store_chunks::BatchStoreChunksResp { results: vec![] });
+    }
+
+    let first_file_path = &data.chunks[0].file_path;
+    let canister_id = match read_state(|state| state.internal_filestorage.get(first_file_path).cloned()) {
+        Some(info) => info.canister,
+        None => {
+            return Err(batch_store_chunks::BatchStoreChunksError::StorageCanisterError(
+                "Upload not initialized".to_string(),
+            ));
+        }
+    };
+
+    let canister: StorageCanister = match read_state(|state| {
+        state.data.sub_canister_manager.get_canister(canister_id)
+    }) {
+        Some(canister) => canister,
+        None => {
+            return Err(batch_store_chunks::BatchStoreChunksError::StorageCanisterError(
+                "Storage canister not found".to_string(),
+            ));
+        }
+    };
+
+    let resp = canister.batch_store_chunks(data.clone()).await?;
+
+    for (idx, result) in resp.results.iter().enumerate() {
+        if result.is_ok() {
+            let chunk_data = &data.chunks[idx];
+            if let Some(info) = read_state(|state| state.internal_filestorage.get(&chunk_data.file_path).cloned()) {
+                mutate_state(|state| {
+                    state.internal_filestorage.insert(
+                        chunk_data.file_path.clone(),
+                        InternalFilestorageData {
+                            init_timestamp: info.init_timestamp,
+                            state: UploadState::InProgress,
+                            canister: info.canister,
+                            path: info.path,
+                        },
+                    );
+                });
+            }
+        }
+    }
+
+    Ok(resp)
+}
+
+#[update(guard = "caller_has_update_uploads_permission")]
+pub async fn batch_finalize_upload(
+    data: batch_finalize_upload::Args,
+) -> batch_finalize_upload::Response {
+    let caller = ic_cdk::api::msg_caller();
+    let _guard_principal = GuardManagement::new(caller)
+        .map_err(|_| batch_finalize_upload::BatchFinalizeUploadError::ConcurrentManagementCall)?;
+
+    if data.files.is_empty() {
+        return Ok(batch_finalize_upload::BatchFinalizeUploadResp { results: vec![] });
+    }
+
+    let first_file_path = &data.files[0].file_path;
+    let canister_id = match read_state(|state| state.internal_filestorage.get(first_file_path).cloned()) {
+        Some(info) => info.canister,
+        None => {
+            return Err(batch_finalize_upload::BatchFinalizeUploadError::StorageCanisterError(
+                "Upload not initialized".to_string(),
+            ));
+        }
+    };
+
+    let canister: StorageCanister = match read_state(|state| {
+        state.data.sub_canister_manager.get_canister(canister_id)
+    }) {
+        Some(canister) => canister,
+        None => {
+            return Err(batch_finalize_upload::BatchFinalizeUploadError::StorageCanisterError(
+                "Storage canister not found".to_string(),
+            ));
+        }
+    };
+
+    let resp = canister.batch_finalize_upload(data.clone()).await?;
+
+    for (idx, result) in resp.results.iter().enumerate() {
+        if let Ok(_url) = result {
+            let file_data = &data.files[idx];
+            let media_path = if file_data.file_path.starts_with('/') {
+                file_data.file_path.clone()
+            } else {
+                format!("/{}", file_data.file_path)
+            };
+
+            let redirection_url = format!("https://{}.raw.icp0.io{}", canister_id, media_path);
+            add_redirection(media_path.clone(), redirection_url.clone());
+
+            mutate_state(|state| {
+                state.data.media_redirections.insert(media_path.clone(), redirection_url);
+                if let Some(info) = state.internal_filestorage.get(&file_data.file_path).cloned() {
+                    state.internal_filestorage.insert(
+                        file_data.file_path.clone(),
+                        InternalFilestorageData {
+                            init_timestamp: info.init_timestamp,
+                            state: UploadState::Finalized,
+                            canister: info.canister,
+                            path: info.path,
+                        },
+                    );
+                }
+            });
+        }
+    }
+
+    Ok(resp)
 }

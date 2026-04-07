@@ -451,8 +451,6 @@ dependencies = [
 [[package]]
 name = "bity-ic-storage-canister-api"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e679c88fcefd9dbc497996d292905cfb6c5223e136e78c8b6695543293ae3162"
 dependencies = [
  "async-trait",
  "bity-ic-canister-logger",
@@ -484,8 +482,6 @@ dependencies = [
 [[package]]
 name = "bity-ic-storage-canister-c2c"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6272d2db174bcfb6b503c0c8636e689bd3858561435bbd140475e83e0415db67"
 dependencies = [
  "bity-ic-storage-canister-api",
  "bity-ic-types",

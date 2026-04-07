@@ -1,7 +1,13 @@
 use crate::client::core_nft::mint;
+use crate::client::core_nft::{
+    batch_finalize_upload as batch_finalize_upload_core,
+    batch_init_upload as batch_init_upload_core,
+    batch_store_chunks as batch_store_chunks_core,
+};
 use crate::client::storage::{finalize_upload, init_upload, store_chunk};
 use crate::core_suite::setup::setup::MINUTE_IN_MS;
 
+use bity_ic_storage_canister_api::{batch_finalize_upload, batch_init_upload, batch_store_chunks};
 use bity_ic_storage_canister_api::{finalize_upload, init_upload, store_chunk};
 use bity_ic_types::Cycles;
 use bytes::Bytes;
@@ -130,6 +136,102 @@ pub fn upload_file(
     println!("finalize_upload_resp: {:?}", finalize_upload_resp);
 
     Ok(buffer)
+}
+
+pub fn load_file_for_upload(file_path: &str) -> Result<(Vec<u8>, String), String> {
+    let file_path = Path::new(file_path);
+    let mut file = File::open(file_path).map_err(|e| format!("Failed to open file: {:?}", e))?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)
+        .map_err(|e| format!("Failed to read file: {:?}", e))?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(&buffer);
+    let file_hash = format!("{:x}", hasher.finalize());
+
+    Ok((buffer, file_hash))
+}
+
+pub fn batch_upload_files_via_core(
+    pic: &mut PocketIc,
+    controller: Principal,
+    collection_canister_id: Principal,
+    files: &[(&str, &str)],
+) -> Result<Vec<Vec<u8>>, String> {
+    let mut buffers = Vec::new();
+    let mut init_files = Vec::new();
+    let mut chunk_requests = Vec::new();
+    let mut finalize_files = Vec::new();
+
+    for (file_path, upload_path) in files {
+        let (buffer, file_hash) = load_file_for_upload(file_path)?;
+        let chunk_size = 1024 * 1024;
+
+        init_files.push(init_upload::Args {
+            file_path: (*upload_path).to_string(),
+            file_hash,
+            file_size: buffer.len() as u64,
+            chunk_size: None,
+        });
+
+        for (chunk_index, chunk) in buffer.chunks(chunk_size).enumerate() {
+            chunk_requests.push(store_chunk::Args {
+                file_path: (*upload_path).to_string(),
+                chunk_id: Nat::from(chunk_index as u64),
+                chunk_data: chunk.to_vec(),
+            });
+        }
+
+        finalize_files.push(finalize_upload::Args {
+            file_path: (*upload_path).to_string(),
+        });
+        buffers.push(buffer);
+    }
+
+    let init_resp = batch_init_upload_core(
+        pic,
+        controller,
+        collection_canister_id,
+        &(batch_init_upload::Args { files: init_files }),
+    )
+    .map_err(|e| format!("batch_init_upload error: {:?}", e))?;
+
+    if init_resp.results.iter().any(|result| result.is_err()) {
+        return Err(format!("batch_init_upload returned errors: {:?}", init_resp));
+    }
+
+    let chunk_resp = batch_store_chunks_core(
+        pic,
+        controller,
+        collection_canister_id,
+        &(batch_store_chunks::Args {
+            chunks: chunk_requests,
+        }),
+    )
+    .map_err(|e| format!("batch_store_chunks error: {:?}", e))?;
+
+    if chunk_resp.results.iter().any(|result| result.is_err()) {
+        return Err(format!("batch_store_chunks returned errors: {:?}", chunk_resp));
+    }
+
+    let finalize_resp = batch_finalize_upload_core(
+        pic,
+        controller,
+        collection_canister_id,
+        &(batch_finalize_upload::Args {
+            files: finalize_files,
+        }),
+    )
+    .map_err(|e| format!("batch_finalize_upload error: {:?}", e))?;
+
+    if finalize_resp.results.iter().any(|result| result.is_err()) {
+        return Err(format!(
+            "batch_finalize_upload returned errors: {:?}",
+            finalize_resp
+        ));
+    }
+
+    Ok(buffers)
 }
 
 pub fn upload_metadata(

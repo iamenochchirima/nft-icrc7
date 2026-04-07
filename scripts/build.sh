@@ -2,10 +2,18 @@
 
 BASE_CANISTER_PATH="./src"
 CANISTERS=("core_nft" "index_icrc7")
+LOCAL_STORAGE_PATH="../ic-storage-canister"
 
 mkdir -p "./wasm"
-curl -L -o "./wasm/storage_canister.wasm" "https://github.com/BitySA/ic-storage-canister/releases/latest/download/storage_canister.wasm"
-curl -L -o "./wasm/storage_canister.wasm.gz" "https://github.com/BitySA/ic-storage-canister/releases/latest/download/storage_canister.wasm.gz"
+
+echo "Building local storage canister artifact"
+(
+    cd "$LOCAL_STORAGE_PATH" &&
+    ./scripts/build.sh
+)
+
+cp "$LOCAL_STORAGE_PATH/wasm/storage_canister.wasm" "./wasm/storage_canister.wasm"
+cp "$LOCAL_STORAGE_PATH/wasm/storage_canister.wasm.gz" "./wasm/storage_canister.wasm.gz"
 
 # Build each canister
 for CANISTER in "${CANISTERS[@]}"; do
