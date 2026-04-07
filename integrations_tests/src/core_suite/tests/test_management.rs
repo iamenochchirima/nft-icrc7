@@ -1,6 +1,7 @@
 use crate::client::core_nft::{
-    cancel_upload, finalize_upload, get_upload_status, grant_permission, init_upload, mint,
-    revoke_permission, store_chunk, update_collection_metadata, update_nft_metadata,
+    batch_finalize_upload, batch_init_upload, batch_store_chunks, cancel_upload, finalize_upload,
+    get_upload_status, grant_permission, init_upload, mint, revoke_permission, store_chunk,
+    update_collection_metadata, update_nft_metadata,
 };
 use crate::utils::create_default_icrc97_metadata;
 
@@ -10,8 +11,9 @@ use icrc_ledger_types::icrc1::account::Account;
 
 use bity_ic_storage_canister_api::types::storage::UploadState;
 use core_nft::types::management::{
-    cancel_upload, finalize_upload, grant_permission, init_upload, mint, mint::MintRequest,
-    revoke_permission, store_chunk, update_collection_metadata, update_nft_metadata,
+    batch_finalize_upload, batch_init_upload, batch_store_chunks, cancel_upload,
+    finalize_upload, grant_permission, init_upload, mint, mint::MintRequest, revoke_permission,
+    store_chunk, update_collection_metadata, update_nft_metadata,
 };
 use ic_cdk::println;
 use sha2::{Digest, Sha256};
@@ -19,8 +21,8 @@ use sha2::{Digest, Sha256};
 use crate::core_suite::setup::default_test_setup;
 use crate::core_suite::setup::setup::TestEnv;
 use crate::utils::{
-    extract_metadata_file_path, fetch_metadata_json, setup_http_client, upload_file,
-    upload_metadata,
+    batch_upload_files_via_core, extract_metadata_file_path, fetch_metadata_json,
+    load_file_for_upload, setup_http_client, upload_file, upload_metadata,
 };
 use bytes::Bytes;
 use http::Request;
@@ -216,6 +218,110 @@ fn test_storage_simple() {
     } else {
         panic!("Expected 307 status code");
     }
+}
+
+#[test]
+fn test_batch_upload_management_flow() {
+    let mut test_env: TestEnv = default_test_setup();
+
+    let TestEnv {
+        ref mut pic,
+        collection_canister_id,
+        controller,
+        ..
+    } = test_env;
+
+    let files = vec![
+        (
+            "./src/core_suite/assets/logo2.min-3f9527e7.svg",
+            "/batch-core-1.svg",
+        ),
+        ("./src/core_suite/assets/logo2.min-3f9527e7.svg", "/batch-core-2.svg"),
+    ];
+
+    let mut init_files = Vec::new();
+    let mut chunk_requests = Vec::new();
+    let mut finalize_files = Vec::new();
+
+    for (file_path, upload_path) in &files {
+        let (buffer, file_hash) = load_file_for_upload(file_path).expect("file should load");
+
+        init_files.push(init_upload::Args {
+            file_path: (*upload_path).to_string(),
+            file_hash,
+            file_size: buffer.len() as u64,
+            chunk_size: None,
+        });
+
+        for (chunk_index, chunk) in buffer.chunks(1024 * 1024).enumerate() {
+            chunk_requests.push(store_chunk::Args {
+                file_path: (*upload_path).to_string(),
+                chunk_id: Nat::from(chunk_index as u64),
+                chunk_data: chunk.to_vec(),
+            });
+        }
+
+        finalize_files.push(finalize_upload::Args {
+            file_path: (*upload_path).to_string(),
+        });
+    }
+
+    let init_resp = batch_init_upload(
+        pic,
+        controller,
+        collection_canister_id,
+        &(batch_init_upload::Args { files: init_files }),
+    )
+    .expect("batch init should succeed");
+
+    assert_eq!(init_resp.results.len(), files.len());
+    assert!(init_resp.results.iter().all(|result| result.is_ok()));
+
+    for (_, upload_path) in &files {
+        let status = get_upload_status(pic, controller, collection_canister_id, &upload_path.to_string())
+            .expect("status should exist after batch init");
+        assert_eq!(status, UploadState::Init);
+    }
+
+    let chunk_resp = batch_store_chunks(
+        pic,
+        controller,
+        collection_canister_id,
+        &(batch_store_chunks::Args {
+            chunks: chunk_requests,
+        }),
+    )
+    .expect("batch store should succeed");
+
+    assert!(chunk_resp.results.iter().all(|result| result.is_ok()));
+
+    for (_, upload_path) in &files {
+        let status = get_upload_status(pic, controller, collection_canister_id, &upload_path.to_string())
+            .expect("status should exist after batch store");
+        assert_eq!(status, UploadState::InProgress);
+    }
+
+    let finalize_resp = batch_finalize_upload(
+        pic,
+        controller,
+        collection_canister_id,
+        &(batch_finalize_upload::Args {
+            files: finalize_files,
+        }),
+    )
+    .expect("batch finalize should succeed");
+
+    assert_eq!(finalize_resp.results.len(), files.len());
+    assert!(finalize_resp.results.iter().all(|result| result.is_ok()));
+
+    for (_, upload_path) in &files {
+        let status = get_upload_status(pic, controller, collection_canister_id, &upload_path.to_string())
+            .expect("status should exist after batch finalize");
+        assert_eq!(status, UploadState::Finalized);
+    }
+
+    let duplicate = batch_upload_files_via_core(pic, controller, collection_canister_id, &files);
+    assert!(duplicate.is_err(), "duplicate batch upload should fail");
 }
 
 #[test]

@@ -1,9 +1,13 @@
 use std::collections::HashMap;
 
-use crate::types::management::{cancel_upload, finalize_upload, init_upload, store_chunk};
+use crate::types::management::{
+    batch_finalize_upload, batch_init_upload, batch_store_chunks, cancel_upload, finalize_upload,
+    init_upload, store_chunk,
+};
 use crate::utils::trace;
 use bity_ic_storage_canister_c2c::{
-    cancel_upload, finalize_upload, get_storage_size, init_upload, store_chunk,
+    batch_finalize_upload, batch_init_upload, batch_store_chunks, cancel_upload, finalize_upload,
+    get_storage_size, init_upload, store_chunk,
 };
 use bity_ic_subcanister_manager;
 use bity_ic_subcanister_manager::Canister;
@@ -16,7 +20,7 @@ use serde::{Deserialize, Serialize};
 const MAX_STORAGE_SIZE: u128 = 500 * 1024 * 1024 * 1024; // 500 GiB TODO maybe we should put a be less here ?
 const MAX_FILE_SIZE: u128 = 2 * 1024 * 1024 * 1024; // 2 GiB
 
-pub const INITIAL_CYCLES_BALANCE: u128 = 5_000_000_000_000; // 5T cycles
+pub const INITIAL_CYCLES_BALANCE: u128 = 1_500_000_000_000; // 1.5T cycles
 pub const RESERVED_CYCLES_BALANCE: u128 = 2_000_000_000_000; // 2T cycles
 
 pub use bity_ic_storage_canister_api::lifecycle::Args as ArgsStorage;
@@ -156,6 +160,59 @@ impl StorageSubCanisterManager {
 
     pub fn list_canisters_ids(&self) -> Vec<Principal> {
         self.sub_canister_manager.list_canisters_ids()
+    }
+
+    pub async fn batch_init_upload(
+        &mut self,
+        data: batch_init_upload::Args,
+    ) -> Result<
+        (
+            bity_ic_storage_canister_api::updates::batch_init_upload::BatchInitUploadResp,
+            Principal,
+        ),
+        String,
+    > {
+        let total_size: u128 = data.files.iter().map(|f| f.file_size as u128).sum();
+
+        if total_size > MAX_STORAGE_SIZE {
+            return Err("Total batch size exceeds maximum storage".to_string());
+        }
+
+        for canister in self.get_subcanisters_installed() {
+            match canister.get_storage_size().await {
+                Ok(size) if size + total_size <= MAX_STORAGE_SIZE => {
+                    match canister.batch_init_upload(data.clone()).await {
+                        Ok(resp) => {
+                            trace("Batch initialized upload");
+                            return Ok((resp, canister.canister_id()));
+                        }
+                        Err(_) => continue,
+                    }
+                }
+                _ => continue,
+            }
+        }
+
+        trace("No available canister found, creating a new one");
+        match self
+            .sub_canister_manager
+            .create_canister(self.init_args.clone())
+            .await
+        {
+            Ok(new_canister) => {
+                if let Some(storage_canister) =
+                    (*new_canister).as_any().downcast_ref::<StorageCanister>()
+                {
+                    match storage_canister.batch_init_upload(data.clone()).await {
+                        Ok(resp) => Ok((resp, storage_canister.canister_id())),
+                        Err(e) => Err(format!("{e:?}")),
+                    }
+                } else {
+                    Err("Failed to cast to StorageCanister".to_string())
+                }
+            }
+            Err(e) => Err(format!("{e:?}")),
+        }
     }
 }
 
@@ -334,6 +391,79 @@ impl StorageCanister {
             }
             Err(e) => Err(
                 crate::types::management::cancel_upload::CancelUploadError::StorageCanisterError(
+                    format!("{e:?}"),
+                ),
+            ),
+        }
+    }
+
+    pub async fn batch_init_upload(
+        &self,
+        data: batch_init_upload::Args,
+    ) -> crate::types::management::batch_init_upload::Response {
+        if self.state != bity_ic_subcanister_manager::CanisterState::Installed {
+            return Err(
+                crate::types::management::batch_init_upload::BatchInitUploadError::StorageCanisterError(
+                    "Canister is not installed".to_string(),
+                ),
+            );
+        }
+
+        let res = retry_async(|| batch_init_upload(self.canister_id, data.clone()), 3).await;
+
+        match res {
+            Ok(resp) => Ok(resp),
+            Err(e) => Err(
+                crate::types::management::batch_init_upload::BatchInitUploadError::StorageCanisterError(
+                    format!("{e:?}"),
+                ),
+            ),
+        }
+    }
+
+    pub async fn batch_store_chunks(
+        &self,
+        data: batch_store_chunks::Args,
+    ) -> crate::types::management::batch_store_chunks::Response {
+        if self.state != bity_ic_subcanister_manager::CanisterState::Installed {
+            return Err(
+                crate::types::management::batch_store_chunks::BatchStoreChunksError::StorageCanisterError(
+                    "Canister is not installed".to_string(),
+                ),
+            );
+        }
+
+        let res = retry_async(|| batch_store_chunks(self.canister_id, data.clone()), 3).await;
+
+        match res {
+            Ok(resp) => Ok(resp),
+            Err(e) => Err(
+                crate::types::management::batch_store_chunks::BatchStoreChunksError::StorageCanisterError(
+                    format!("{e:?}"),
+                ),
+            ),
+        }
+    }
+
+    pub async fn batch_finalize_upload(
+        &self,
+        data: batch_finalize_upload::Args,
+    ) -> crate::types::management::batch_finalize_upload::Response {
+        if self.state != bity_ic_subcanister_manager::CanisterState::Installed {
+            return Err(
+                crate::types::management::batch_finalize_upload::BatchFinalizeUploadError::StorageCanisterError(
+                    "Canister is not installed".to_string(),
+                ),
+            );
+        }
+
+        let res =
+            retry_async(|| batch_finalize_upload(self.canister_id, data.clone()), 3).await;
+
+        match res {
+            Ok(resp) => Ok(resp),
+            Err(e) => Err(
+                crate::types::management::batch_finalize_upload::BatchFinalizeUploadError::StorageCanisterError(
                     format!("{e:?}"),
                 ),
             ),

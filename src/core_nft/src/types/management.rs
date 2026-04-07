@@ -247,6 +247,57 @@ pub mod cancel_upload {
     }
 }
 
+pub mod batch_init_upload {
+    use bity_ic_storage_canister_api::updates::batch_init_upload;
+    pub use bity_ic_storage_canister_api::updates::init_upload::Args as InitArgs;
+    use candid::CandidType;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize, CandidType, Debug)]
+    pub enum BatchInitUploadError {
+        ConcurrentManagementCall,
+        StorageCanisterError(String),
+    }
+
+    pub type Args = batch_init_upload::Args;
+    pub type Response = Result<batch_init_upload::BatchInitUploadResp, BatchInitUploadError>;
+}
+
+pub mod batch_store_chunks {
+    use bity_ic_storage_canister_api::updates::batch_store_chunks;
+    pub use bity_ic_storage_canister_api::updates::batch_store_chunks::BatchStoreChunksResp;
+    pub use bity_ic_storage_canister_api::updates::store_chunk::Args as StoreChunkArgs;
+    use candid::CandidType;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize, CandidType, Debug)]
+    pub enum BatchStoreChunksError {
+        ConcurrentManagementCall,
+        StorageCanisterError(String),
+    }
+
+    pub type Args = batch_store_chunks::Args;
+    pub type Response = Result<batch_store_chunks::BatchStoreChunksResp, BatchStoreChunksError>;
+}
+
+pub mod batch_finalize_upload {
+    use bity_ic_storage_canister_api::updates::batch_finalize_upload;
+    pub use bity_ic_storage_canister_api::updates::batch_finalize_upload::BatchFinalizeUploadResp;
+    pub use bity_ic_storage_canister_api::updates::finalize_upload::Args as FinalizeArgs;
+    use candid::CandidType;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize, CandidType, Debug)]
+    pub enum BatchFinalizeUploadError {
+        ConcurrentManagementCall,
+        StorageCanisterError(String),
+    }
+
+    pub type Args = batch_finalize_upload::Args;
+    pub type Response =
+        Result<batch_finalize_upload::BatchFinalizeUploadResp, BatchFinalizeUploadError>;
+}
+
 pub mod grant_permission {
     use super::*;
 

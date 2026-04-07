@@ -106,7 +106,7 @@ fn init(args: Args) {
 
             let _tx_window = match init_args.tx_window {
                 Some(tx_window) => Duration::from_millis(u64::try_from(tx_window.0).unwrap()),
-                None => Duration::from_secs(0),
+                None => Duration::from_millis(100),
             };
 
             let approval_init = data.approval_init.clone();
@@ -159,12 +159,12 @@ fn init(args: Args) {
                 ],
                 constants: ICRC3Properties::new(
                     _tx_window,
-                    100,
+                    1000,
                     1024 * 1024 * 1024,
                     100_u64.into(),
                     5_000_000_000_000,
                     5_000_000_000_000,
-                    25,
+                    100,
                     None,
                     None,
                 ),
