@@ -37,6 +37,7 @@ type Args = record { file_path : text };
 type Args_1 = record { files : vec Args };
 type Args_10 = record { mint_requests : vec MintRequest };
 type Args_11 = record {
+  is_prod : opt bool;
   supply_cap : opt nat;
   tx_window : opt nat;
   default_take_value : opt nat;
@@ -185,6 +186,7 @@ type InitApprovalsArg = record {
   max_revoke_approvals : opt nat;
 };
 type InitArgs = record {
+  is_prod : bool;
   permissions : PermissionManager;
   supply_cap : opt nat;
   tx_window : opt nat;

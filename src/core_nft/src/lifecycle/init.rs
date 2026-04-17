@@ -38,6 +38,7 @@ pub struct InitArgs {
     pub tx_window: Option<Nat>,
     pub permitted_drift: Option<Nat>,
     pub max_canister_storage_threshold: Option<Nat>,
+    pub is_prod: bool,
     pub collection_metadata: HashMap<String, Value>,
     pub approval_init: InitApprovalsArg,
 }
@@ -84,8 +85,9 @@ fn init(args: Args) {
                 init_args.max_memo_size,
                 init_args.atomic_batch_transfers,
                 init_args.tx_window.clone(),
-                init_args.permitted_drift,
                 init_args.max_canister_storage_threshold,
+                init_args.is_prod,
+                init_args.permitted_drift,
                 init_args.approval_init.clone(),
             );
 
@@ -105,8 +107,8 @@ fn init(args: Args) {
             }
 
             let _tx_window = match init_args.tx_window {
-                Some(tx_window) => Duration::from_millis(u64::try_from(tx_window.0).unwrap()),
-                None => Duration::from_millis(100),
+                Some(tx_window) => Duration::from_nanos(u64::try_from(tx_window.0).unwrap()),
+                None => Duration::from_nanos(100),
             };
 
             let approval_init = data.approval_init.clone();

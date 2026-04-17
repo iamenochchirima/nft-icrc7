@@ -78,6 +78,7 @@ pub struct Data {
     pub tx_window: Option<Nat>,
     pub permitted_drift: Option<Nat>,
     pub max_canister_storage_threshold: Option<Nat>,
+    pub is_prod: bool,
     pub tokens_list: HashMap<Nat, Icrc7Token>,
     pub tokens_list_by_owner: HashMap<Account, Vec<Nat>>,
     pub approval_init: InitApprovalsArg,
@@ -106,6 +107,7 @@ impl Data {
         atomic_batch_transfers: Option<bool>,
         tx_window: Option<Nat>,
         max_canister_storage_threshold: Option<Nat>,
+        is_prod: bool,
         permitted_drift: Option<Nat>,
         approval_init: InitApprovalsArg,
     ) -> Self {
@@ -134,6 +136,7 @@ impl Data {
                     .into_iter()
                     .chain(vec![ic_cdk::api::canister_self()].into_iter())
                     .collect(),
+                is_prod: Some(is_prod),
             }),
             sub_canister::ArgsStorage::Upgrade(UpgradeArgs {
                 version,
@@ -166,6 +169,7 @@ impl Data {
             tx_window,
             permitted_drift,
             max_canister_storage_threshold,
+            is_prod,
             tokens_list: HashMap::new(),
             tokens_list_by_owner: HashMap::new(),
             approval_init,
@@ -215,11 +219,10 @@ impl Data {
     }
 
     pub fn tokens_ids_of_account(&self, owner: &Account) -> Vec<Nat> {
-        self.tokens_list
-            .iter()
-            .filter(|(_, token)| &token.token_owner == owner)
-            .map(|(id, _)| id.clone())
-            .collect()
+        self.tokens_list_by_owner
+            .get(owner)
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub fn total_supply(&self) -> Nat {
@@ -245,6 +248,7 @@ impl Clone for Data {
             tx_window: self.tx_window.clone(),
             permitted_drift: self.permitted_drift.clone(),
             max_canister_storage_threshold: self.max_canister_storage_threshold.clone(),
+            is_prod: self.is_prod,
             tokens_list: self.tokens_list.clone(),
             tokens_list_by_owner: self.tokens_list_by_owner.clone(),
             approval_init: self.approval_init.clone(),

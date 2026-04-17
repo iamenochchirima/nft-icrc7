@@ -26,6 +26,23 @@ use icrc_ledger_types::icrc1::account::Account;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+fn normalize_media_path(path: &str) -> String {
+    if path.starts_with('/') {
+        path.to_string()
+    } else {
+        format!("/{}", path)
+    }
+}
+
+fn build_asset_url(canister_id: Principal, path: &str) -> String {
+    let is_prod = read_state(|state| state.data.is_prod);
+    if is_prod {
+        format!("https://{canister_id}.raw.icp0.io{path}")
+    } else {
+        format!("http://{canister_id}.raw.localhost:4943{path}")
+    }
+}
+
 #[update(guard = "caller_has_update_collection_metadata_permission")]
 pub async fn update_collection_metadata(
     req: management::update_collection_metadata::Args,
@@ -118,6 +135,12 @@ pub async fn update_collection_metadata(
         });
     }
 
+    if let Some(is_prod) = req.is_prod {
+        mutate_state(|state| {
+            state.data.is_prod = is_prod;
+        });
+    }
+
     Ok(())
 }
 
@@ -141,17 +164,28 @@ pub fn mint(req: management::mint::Args) -> management::mint::Response {
         return Err(management::mint::MintError::ExceedMaxAllowedSupplyCap);
     }
 
-    let current_token_id = read_state(|state| state.data.last_token_id.clone());
-    let token_list = read_state(|state| state.data.tokens_list.clone());
-    let supply_cap = read_state(|state| {
-        state
-            .data
-            .supply_cap
-            .clone()
-            .unwrap_or(Nat::from(icrc7::DEFAULT_MAX_SUPPLY_CAP))
+    let (current_token_id, token_count, supply_cap) = read_state(|state| {
+        (
+            state.data.last_token_id.clone(),
+            state.data.tokens_list.len(),
+            state
+                .data
+                .supply_cap
+                .clone()
+            .unwrap_or(Nat::from(icrc7::DEFAULT_MAX_SUPPLY_CAP)),
+        )
     });
 
-    if token_list.len() + req.mint_requests.len() > supply_cap {
+    let mint_start = ic_cdk::api::time();
+    ic_cdk::println!(
+        "mint:start batch_size={} token_count={} last_token_id={} supply_cap={}",
+        req.mint_requests.len(),
+        token_count,
+        current_token_id,
+        supply_cap,
+    );
+
+    if token_count + req.mint_requests.len() > supply_cap {
         return Err(management::mint::MintError::ExceedMaxAllowedSupplyCap);
     }
 
@@ -164,9 +198,15 @@ pub fn mint(req: management::mint::Args) -> management::mint::Response {
         }
     }
 
+    ic_cdk::println!(
+        "mint:memo_validation_done elapsed_ns={}",
+        ic_cdk::api::time().saturating_sub(mint_start)
+    );
+
     let mut new_tokens = Vec::new();
     let mut transactions = Vec::new();
     let timestamp = ic_cdk::api::time();
+    let prepare_start = ic_cdk::api::time();
 
     for (i, mint_request) in req.mint_requests.iter().enumerate() {
         let token_id = current_token_id.clone() + Nat::from(i as u64);
@@ -191,18 +231,70 @@ pub fn mint(req: management::mint::Args) -> management::mint::Response {
 
         new_tokens.push((token_id, new_token, mint_request.token_owner.clone()));
         transactions.push(transaction);
+
+        let prepared = i + 1;
+        if prepared % 10 == 0 || prepared == req.mint_requests.len() {
+            ic_cdk::println!(
+                "mint:prepare_progress prepared={}/{} elapsed_ns={}",
+                prepared,
+                req.mint_requests.len(),
+                ic_cdk::api::time().saturating_sub(prepare_start)
+            );
+        }
     }
 
-    for transaction in transactions {
+    ic_cdk::println!(
+        "mint:prepare_done total_tokens={} elapsed_ns={}",
+        req.mint_requests.len(),
+        ic_cdk::api::time().saturating_sub(prepare_start)
+    );
+
+    let icrc3_start = ic_cdk::api::time();
+    let total_transactions = transactions.len();
+    ic_cdk::println!(
+        "mint:icrc3_start transaction_count={}",
+        total_transactions
+    );
+
+    for (index, transaction) in transactions.into_iter().enumerate() {
         match icrc3_add_transaction(transaction) {
-            Ok(_) => {}
+            Ok(_) => {
+                let completed = index + 1;
+                if completed % 10 == 0 || completed == total_transactions {
+                    ic_cdk::println!(
+                        "mint:icrc3_progress completed={}/{} elapsed_ns={}",
+                        completed,
+                        total_transactions,
+                        ic_cdk::api::time().saturating_sub(icrc3_start)
+                    );
+                }
+            }
             Err(e) => {
+                ic_cdk::println!(
+                    "mint:icrc3_error index={} elapsed_ns={} error={}",
+                    index,
+                    ic_cdk::api::time().saturating_sub(icrc3_start),
+                    e
+                );
                 return Err(management::mint::MintError::StorageCanisterError(
                     e.to_string(),
                 ));
             }
         }
     }
+
+    ic_cdk::println!(
+        "mint:icrc3_done transaction_count={} elapsed_ns={}",
+        total_transactions,
+        ic_cdk::api::time().saturating_sub(icrc3_start)
+    );
+
+    let state_insert_start = ic_cdk::api::time();
+    ic_cdk::println!(
+        "mint:state_insert_start token_count_before={} batch_size={}",
+        token_count,
+        req.mint_requests.len()
+    );
 
     mutate_state(|state| {
         let new_last_token_id =
@@ -219,6 +311,12 @@ pub fn mint(req: management::mint::Args) -> management::mint::Response {
                 .push(token_id);
         }
     });
+
+    ic_cdk::println!(
+        "mint:state_insert_done elapsed_ns={} total_elapsed_ns={}",
+        ic_cdk::api::time().saturating_sub(state_insert_start),
+        ic_cdk::api::time().saturating_sub(mint_start)
+    );
 
     trace(&format!(
         "Successfully minted {} NFTs",
@@ -515,13 +613,9 @@ pub async fn finalize_upload(data: finalize_upload::Args) -> finalize_upload::Re
         }
     }
 
-    let path = if media_path.starts_with('/') {
-        media_path.clone()
-    } else {
-        format!("/{}", media_path)
-    };
+    let path = normalize_media_path(&media_path);
 
-    let redirection_url = format!("https://{}.raw.icp0.io{}", canister_id, path.clone());
+    let redirection_url = build_asset_url(canister_id, &path);
 
     add_redirection(path.clone(), redirection_url.clone());
 
@@ -542,11 +636,7 @@ pub async fn finalize_upload(data: finalize_upload::Args) -> finalize_upload::Re
         );
     });
 
-    let url = format!(
-        "https://{}.raw.icp0.io{}",
-        ic_cdk::api::canister_self().to_string(),
-        path.clone()
-    );
+    let url = build_asset_url(ic_cdk::api::canister_self(), &path);
 
     return Ok(finalize_upload::FinalizeUploadResp { url: url });
 }
@@ -826,13 +916,8 @@ pub async fn batch_finalize_upload(
     for (idx, result) in resp.results.iter().enumerate() {
         if let Ok(_url) = result {
             let file_data = &data.files[idx];
-            let media_path = if file_data.file_path.starts_with('/') {
-                file_data.file_path.clone()
-            } else {
-                format!("/{}", file_data.file_path)
-            };
-
-            let redirection_url = format!("https://{}.raw.icp0.io{}", canister_id, media_path);
+            let media_path = normalize_media_path(&file_data.file_path);
+            let redirection_url = build_asset_url(canister_id, &media_path);
             add_redirection(media_path.clone(), redirection_url.clone());
 
             mutate_state(|state| {

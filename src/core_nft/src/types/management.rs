@@ -106,6 +106,7 @@ pub mod update_collection_metadata {
         pub tx_window: Option<Nat>,
         pub permitted_drift: Option<Nat>,
         pub max_canister_storage_threshold: Option<Nat>,
+        pub is_prod: Option<bool>,
         pub collection_metadata: Option<HashMap<String, CustomValue>>,
     }
     #[derive(Serialize, Deserialize, CandidType, Debug)]
