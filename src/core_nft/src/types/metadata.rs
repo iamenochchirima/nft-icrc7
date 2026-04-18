@@ -75,6 +75,9 @@ pub struct Metadata {
 
 impl Clone for Metadata {
     fn clone(&self) -> Self {
+        // Creates a new handle to the same stable memory region.
+        // With load(), this correctly reads existing data from stable memory.
+        // Safe for read-only operations (e.g., queries).
         Self {
             data: init_btree_map(),
         }
@@ -89,6 +92,8 @@ fn init_metadata() -> Metadata {
 
 fn init_btree_map() -> StableBTreeMap<WrappedNat, MetadataData, VM> {
     let memory = get_metadata_memory();
+    // Use init() - our tests showed it does NOT wipe existing data in v0.7.2
+    // The Clone pattern issue was fixed by avoiding clones in queries (icrc7.rs)
     StableBTreeMap::init(memory)
 }
 

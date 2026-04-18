@@ -44,6 +44,7 @@ pub type TokenApprovals = StableBTreeMap<WrappedNat, WrappedApprovalValue, VM>;
 
 pub fn init_token_approvals() -> TokenApprovals {
     let memory = get_token_approvals_memory();
+    // Use init() so fresh memory initializes cleanly without trapping.
     StableBTreeMap::init(memory)
 }
 
@@ -52,6 +53,7 @@ pub type CollectionApprovals = StableBTreeMap<WrappedAccount, WrappedApprovalVal
 
 pub fn init_collection_approvals() -> CollectionApprovals {
     let memory = get_collection_approvals_memory();
+    // Use init() so fresh memory initializes cleanly without trapping.
     StableBTreeMap::init(memory)
 }
 

@@ -11,6 +11,8 @@ use crate::types::value_custom::CustomValue as Value;
 
 use bity_ic_canister_tracing_macros::trace;
 use bity_ic_icrc3::config::{ICRC3Config, ICRC3Properties};
+use bity_ic_icrc3::memory::set_memory_getter;
+use crate::memory::get_icrc3_memory;
 use bity_ic_types::BuildVersion;
 use bity_ic_utils::env::{CanisterEnv, Environment};
 use candid::{CandidType, Nat};
@@ -175,6 +177,11 @@ fn init(args: Args) {
             let runtime_state = RuntimeState::new(env, data);
 
             init_canister(runtime_state);
+
+            // IMPORTANT: Set the ICRC3 memory getter BEFORE initializing ICRC3.
+            // This ensures ICRC3 uses our shared MemoryManager instead of creating
+            // its own, preventing bucket allocation conflicts.
+            set_memory_getter(get_icrc3_memory);
             init_icrc3(icrc3_config);
             start_default_archive_job();
             certify_all_assets();

@@ -7,6 +7,8 @@ use crate::Args;
 use bity_ic_canister_logger::LogEntry;
 use bity_ic_canister_tracing_macros::trace;
 use bity_ic_icrc3::icrc3::ICRC3;
+use bity_ic_icrc3::memory::set_memory_getter;
+use crate::memory::get_icrc3_memory;
 use bity_ic_stable_memory::get_reader;
 use bity_ic_types::BuildVersion;
 
@@ -51,6 +53,11 @@ fn post_upgrade(args: Args) {
 
             bity_ic_canister_logger::init_with_logs(state.env.is_test_mode(), logs, traces);
             init_canister(state.clone());
+
+            // IMPORTANT: Set the ICRC3 memory getter BEFORE replacing ICRC3.
+            // This ensures ICRC3 uses our shared MemoryManager instead of creating
+            // its own, preventing bucket allocation conflicts.
+            set_memory_getter(get_icrc3_memory);
             replace_icrc3(icrc3);
             start_default_archive_job();
 

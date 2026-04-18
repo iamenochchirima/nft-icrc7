@@ -340,6 +340,36 @@ dependencies = [
 [[package]]
 name = "bity-ic-icrc3"
 version = "0.7.0"
+dependencies = [
+ "anyhow",
+ "bity-ic-canister-time",
+ "bity-ic-icrc3-archive-api",
+ "bity-ic-icrc3-archive-c2c-client",
+ "bity-ic-subcanister-manager",
+ "bity-ic-types",
+ "bity-ic-utils",
+ "candid",
+ "canfund",
+ "futures",
+ "hex",
+ "ic-cdk",
+ "ic-certification",
+ "ic-ledger-types",
+ "ic-stable-structures 0.7.2",
+ "ic0",
+ "icrc-ledger-types",
+ "leb128",
+ "serde",
+ "serde_bytes",
+ "serde_cbor",
+ "sha2 0.10.9",
+ "syn 2.0.114",
+ "tracing",
+]
+
+[[package]]
+name = "bity-ic-icrc3"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa948e264ac351d8248813002f0a57316b8291d3f3e4a4945a8b08d4b0a16c32"
 dependencies = [
@@ -408,7 +438,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af3bd8792eba1b569cbc2cb00459e5015aab47c72937d1a0bcb2fdebddf0b3d3"
 dependencies = [
  "bity-ic-canister-client",
- "bity-ic-icrc3",
+ "bity-ic-icrc3 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bity-ic-types",
  "candid",
  "ic-cdk",
@@ -418,8 +448,6 @@ dependencies = [
 [[package]]
 name = "bity-ic-icrc3-macros"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d57b1e1e22876ba071179987b00643b5d68e5ee00025549a689abae8414698d"
 dependencies = [
  "bity-ic-canister-time",
  "lazy_static",
@@ -824,7 +852,7 @@ dependencies = [
  "bity-ic-canister-state-macros",
  "bity-ic-canister-time",
  "bity-ic-canister-tracing-macros",
- "bity-ic-icrc3",
+ "bity-ic-icrc3 0.7.0",
  "bity-ic-icrc3-macros",
  "bity-ic-serializer",
  "bity-ic-stable-memory",
@@ -3649,6 +3677,19 @@ dependencies = [
  "once_cell",
  "rustix",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "test_canister"
+version = "0.1.0"
+dependencies = [
+ "candid",
+ "ic-cdk",
+ "ic-cdk-macros",
+ "ic-stable-structures 0.7.2",
+ "minicbor 1.0.0",
+ "num-bigint",
+ "serde",
 ]
 
 [[package]]

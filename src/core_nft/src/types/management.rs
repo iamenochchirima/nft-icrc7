@@ -87,6 +87,59 @@ pub mod get_all_uploads {
     pub type Response = Result<HashMap<String, UploadState>, GetAllUploadsError>;
 }
 
+pub mod debug_metadata_snapshot {
+    use super::*;
+
+    #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+    pub struct Args {
+        pub token_id: Nat,
+    }
+
+    #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+    pub struct MetadataView {
+        pub keys: Vec<String>,
+        pub metadata: Vec<(String, ICRC3Value)>,
+        pub error: Option<String>,
+    }
+
+    #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+    pub struct Response {
+        pub token_id: Nat,
+        pub token_exists: bool,
+        pub metadata_ids_sample: Vec<Nat>,
+        pub metadata_ids_total: Nat,
+        pub direct_view: MetadataView,
+        pub clone_view: MetadataView,
+    }
+}
+
+pub mod debug_metadata_ids {
+    use super::*;
+
+    #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+    pub struct Response {
+        pub metadata_ids_sample: Vec<Nat>,
+        pub metadata_ids_total: Nat,
+    }
+}
+
+pub mod debug_metadata_entry {
+    use super::*;
+
+    #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+    pub struct Args {
+        pub token_id: Nat,
+    }
+
+    #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+    pub struct Response {
+        pub token_id: Nat,
+        pub keys: Vec<String>,
+        pub metadata: Vec<(String, ICRC3Value)>,
+        pub error: Option<String>,
+    }
+}
+
 pub mod update_collection_metadata {
     use super::*;
 

@@ -1,5 +1,6 @@
 use crate::state::read_state;
 use crate::types::icrc7;
+use crate::types::management;
 use crate::types::metadata::__METADATA;
 
 use candid::Nat;
@@ -198,7 +199,9 @@ pub fn icrc7_token_metadata(
         let token = read_state(|state| state.data.get_token_by_id(&token_id).cloned());
         match token {
             Some(token) => {
-                let metadata = token.token_metadata(&__METADATA.with_borrow(|m| m.clone()));
+                // IMPORTANT: Don't clone Metadata - pass reference directly to avoid
+                // reinitializing the StableBTreeMap (which can corrupt data)
+                let metadata = __METADATA.with_borrow(|m| token.token_metadata(m));
                 ret.push(Some(metadata));
             }
             None => {
@@ -208,6 +211,114 @@ pub fn icrc7_token_metadata(
     }
 
     ret
+}
+
+#[query]
+pub fn debug_metadata_snapshot(
+    args: management::debug_metadata_snapshot::Args,
+) -> management::debug_metadata_snapshot::Response {
+    let token_id = args.token_id;
+    let token = read_state(|state| state.data.get_token_by_id(&token_id).cloned());
+    let token_exists = token.is_some();
+
+    let direct_view = __METADATA.with_borrow(|metadata| {
+        match metadata.get_all_data(Some(token_id.clone())) {
+            Ok(data) => {
+                let keys = data.keys().cloned().collect::<Vec<_>>();
+                let metadata = data
+                    .into_iter()
+                    .map(|(key, value)| (key, value.0))
+                    .collect::<Vec<_>>();
+                management::debug_metadata_snapshot::MetadataView {
+                    keys,
+                    metadata,
+                    error: None,
+                }
+            }
+            Err(error) => management::debug_metadata_snapshot::MetadataView {
+                keys: Vec::new(),
+                metadata: Vec::new(),
+                error: Some(error),
+            },
+        }
+    });
+
+    let clone_view = match token {
+        Some(token) => {
+            // IMPORTANT: Don't clone Metadata - pass reference directly
+            let metadata = __METADATA.with_borrow(|m| token.token_metadata(m));
+            let keys = metadata.iter().map(|(key, _)| key.clone()).collect::<Vec<_>>();
+            management::debug_metadata_snapshot::MetadataView {
+                keys,
+                metadata,
+                error: None,
+            }
+        }
+        None => management::debug_metadata_snapshot::MetadataView {
+            keys: Vec::new(),
+            metadata: Vec::new(),
+            error: Some("Token not found".to_string()),
+        },
+    };
+
+    let (metadata_ids_sample, metadata_ids_total) = __METADATA.with_borrow(|metadata| {
+        let ids = metadata.get_all_nfts_ids().unwrap_or_default();
+        let total = ids.len();
+        let sample = ids.into_iter().take(10).collect::<Vec<_>>();
+        (sample, Nat::from(total as u64))
+    });
+
+    management::debug_metadata_snapshot::Response {
+        token_id,
+        token_exists,
+        metadata_ids_sample,
+        metadata_ids_total,
+        direct_view,
+        clone_view,
+    }
+}
+
+#[query]
+pub fn debug_metadata_ids() -> management::debug_metadata_ids::Response {
+    let (metadata_ids_sample, metadata_ids_total) = __METADATA.with_borrow(|metadata| {
+        let ids = metadata.get_all_nfts_ids().unwrap_or_default();
+        let total = ids.len();
+        let sample = ids.into_iter().take(10).collect::<Vec<_>>();
+        (sample, Nat::from(total as u64))
+    });
+
+    management::debug_metadata_ids::Response {
+        metadata_ids_sample,
+        metadata_ids_total,
+    }
+}
+
+#[query]
+pub fn debug_metadata_entry(
+    args: management::debug_metadata_entry::Args,
+) -> management::debug_metadata_entry::Response {
+    let token_id = args.token_id;
+
+    let (keys, metadata, error) = __METADATA.with_borrow(|metadata| {
+        match metadata.get_all_data(Some(token_id.clone())) {
+            Ok(data) => {
+                let keys = data.keys().cloned().collect::<Vec<_>>();
+                let metadata = data
+                    .into_iter()
+                    .map(|(key, value)| (key, value.0))
+                    .collect::<Vec<_>>();
+                (keys, metadata, None)
+            }
+            Err(error) => (Vec::new(), Vec::new(), Some(error)),
+        }
+    });
+
+    management::debug_metadata_entry::Response {
+        token_id,
+        keys,
+        metadata,
+        error,
+    }
 }
 
 #[query]

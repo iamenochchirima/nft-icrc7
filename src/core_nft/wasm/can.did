@@ -35,8 +35,9 @@ type ArchivedBlocks = record {
 };
 type Args = record { file_path : text };
 type Args_1 = record { files : vec Args };
-type Args_10 = record { mint_requests : vec MintRequest };
-type Args_11 = record {
+type Args_10 = record { permission : Permission; "principal" : principal };
+type Args_11 = record { mint_requests : vec MintRequest };
+type Args_12 = record {
   is_prod : opt bool;
   supply_cap : opt nat;
   tx_window : opt nat;
@@ -54,11 +55,11 @@ type Args_11 = record {
   collection_metadata : opt vec record { text; CustomValue };
   symbol : opt text;
 };
-type Args_12 = record {
+type Args_13 = record {
   token_id : nat;
   metadata : vec record { text; CustomValue };
 };
-type Args_13 = variant { Upgrade : UpgradeArgs; Init : InitArgs };
+type Args_14 = variant { Upgrade : UpgradeArgs; Init : InitArgs };
 type Args_2 = record {
   file_hash : text;
   file_path : text;
@@ -69,13 +70,32 @@ type Args_3 = record { files : vec Args_2 };
 type Args_4 = record { chunk_id : nat; file_path : text; chunk_data : blob };
 type Args_5 = record { chunks : vec Args_4 };
 type Args_6 = record { file_path : text };
-type Args_7 = record { "principal" : principal };
-type Args_8 = record { permission : Permission; "principal" : principal };
+type Args_7 = record { token_id : nat };
+type Args_8 = record { "principal" : principal };
 type Args_9 = record { permission : Permission; "principal" : principal };
+type BTreeMap = vec record {
+  text;
+  variant {
+    Int : int;
+    Map : BTreeMap;
+    Nat : nat;
+    Blob : blob;
+    Text : text;
+    Array : vec ICRC3Value;
+  };
+};
 type BatchFinalizeUploadResp = record { results : vec Result };
 type BatchInitUploadResp = record { results : vec Result_1 };
 type BatchStoreChunksResp = record { results : vec Result_2 };
 type BlockWithId = record { id : nat; block : ICRC3Value };
+type BucketScan = record {
+  non_zero_bytes : nat64;
+  looks_like_btree : bool;
+  offset : nat64;
+  looks_like_data : bool;
+  first_64_bytes_hex : text;
+  bucket_index : nat64;
+};
 type BuildVersion = record { major : nat32; minor : nat32; patch : nat32 };
 type BurnNftError = variant {
   StorageCanisterError : text;
@@ -112,6 +132,12 @@ type CustomValue = variant {
   Blob : blob;
   Text : text;
   Array : vec ICRC3Value;
+};
+type DataPattern = record {
+  pattern_type : text;
+  offset : nat64;
+  preview_utf8 : opt text;
+  preview_hex : text;
 };
 type DisplayMessageType = variant { GenericDisplay; FieldsDisplay };
 type Duration = record { secs : nat64; nanos : nat32 };
@@ -169,6 +195,14 @@ type ICRC3Properties = record {
 };
 type ICRC3Value = variant {
   Int : int;
+  Map : BTreeMap;
+  Nat : nat;
+  Blob : blob;
+  Text : text;
+  Array : vec ICRC3Value;
+};
+type ICRC3Value_1 = variant {
+  Int : int;
   Map : vec record { text; ICRC3Value };
   Nat : nat;
   Blob : blob;
@@ -218,6 +252,25 @@ type IsApprovedArg = record {
   from_subaccount : opt blob;
   spender : Account;
 };
+type MapHealth = record {
+  total_entries : opt nat;
+  name : text;
+  error : opt text;
+  readable : bool;
+  sample_keys : vec text;
+};
+type MemoryManagerHeader = record {
+  version : nat8;
+  raw_header : blob;
+  bucket_size_in_pages : nat16;
+  num_allocated_buckets : nat16;
+  magic_bytes : text;
+};
+type MetadataView = record {
+  metadata : vec record { text; ICRC3Value_1 };
+  keys : vec text;
+  error : opt text;
+};
 type MintError = variant {
   TokenAlreadyExists;
   StorageCanisterError : text;
@@ -226,7 +279,7 @@ type MintError = variant {
   ConcurrentManagementCall;
 };
 type MintRequest = record {
-  metadata : vec record { text; ICRC3Value };
+  metadata : vec record { text; ICRC3Value_1 };
   memo : opt blob;
   token_owner : Account;
 };
@@ -240,6 +293,24 @@ type Permission = variant {
 };
 type PermissionManager = record {
   user_permissions : vec record { principal; vec Permission };
+};
+type Response = record {
+  token_id : nat;
+  metadata : vec record { text; ICRC3Value_1 };
+  keys : vec text;
+  error : opt text;
+};
+type Response_1 = record {
+  metadata_ids_sample : vec nat;
+  metadata_ids_total : nat;
+};
+type Response_2 = record {
+  token_exists : bool;
+  metadata_ids_sample : vec nat;
+  token_id : nat;
+  direct_view : MetadataView;
+  metadata_ids_total : nat;
+  clone_view : MetadataView;
 };
 type Result = variant { Ok : text; Err : FinalizeUploadError };
 type Result_1 = variant { Ok; Err : InitUploadError };
@@ -319,6 +390,17 @@ type RevokeTokenApprovalResponse = variant {
   Ok : nat;
   Err : RevokeTokenApprovalError;
 };
+type StableMemoryInfo = record {
+  total_pages : nat64;
+  total_bytes : nat64;
+  total_buckets_approx : nat64;
+};
+type StorageHealth = record {
+  metadata : MapHealth;
+  stable_memory : StableMemoryInfo;
+  token_approvals : MapHealth;
+  collection_approvals : MapHealth;
+};
 type StoreChunkError = variant {
   InvalidFileHash;
   InvalidFilePath;
@@ -331,6 +413,18 @@ type StoreChunkError = variant {
 };
 type SupportedBlockType = record { url : text; block_type : text };
 type SupportedStandard = record { url : text; name : text };
+type TokenDebugState = record {
+  token_exists : bool;
+  token_id : nat;
+  owner : opt text;
+  metadata_key_count : opt nat;
+  token_approval_count : opt nat;
+  token_approval_spenders_sample : vec text;
+  error : opt text;
+  metadata_keys_sample : vec text;
+  token_approval_readable : bool;
+  metadata_readable : bool;
+};
 type TransferArg = record {
   to : Account;
   token_id : nat;
@@ -393,7 +487,7 @@ type Vec = vec record {
           id : nat;
           block : variant {
             Int : int;
-            Map : vec record { text; ICRC3Value };
+            Map : BTreeMap;
             Nat : nat;
             Blob : blob;
             Text : text;
@@ -404,19 +498,41 @@ type Vec = vec record {
       },
     ) query;
 };
-service : (Args_13) -> {
+service : (Args_14) -> {
   batch_finalize_upload : (Args_1) -> (BatchFinalizeUploadResp);
   batch_init_upload : (Args_3) -> (BatchInitUploadResp);
   batch_store_chunks : (Args_5) -> (BatchStoreChunksResp);
   burn_nft : (nat) -> (Result_3);
   cancel_upload : (Args_6) -> (Result_4);
+  debug_approvals_health : (nat64) -> (vec MapHealth) query;
+  // Try to find and count BTR (StableBTreeMap) headers in stable memory
+  debug_find_btree_headers : (nat64) -> (vec nat64) query;
+  // Read the MemoryManager header (first ~64KB contains header info)
+  debug_memory_manager_header : () -> (MemoryManagerHeader) query;
+  debug_metadata_entry : (Args_7) -> (Response) query;
+  debug_metadata_health : (nat64) -> (MapHealth) query;
+  debug_metadata_ids : () -> (Response_1) query;
+  debug_metadata_snapshot : (Args_7) -> (Response_2) query;
+  // Read raw bytes from a specific offset
+  debug_read_raw : (nat64, nat64) -> (blob) query;
+  // Scan multiple buckets at once
+  debug_scan_all_buckets : (nat64) -> (vec BucketScan) query;
+  // Scan a specific bucket to see what's there
+  debug_scan_bucket : (nat64) -> (BucketScan) query;
+  // Search for potential metadata patterns in stable memory
+  // Looks for minicbor map markers and common metadata keys
+  debug_search_for_metadata : (nat64, nat64) -> (vec DataPattern) query;
+  // Get basic stable memory info
+  debug_stable_memory_info : () -> (StableMemoryInfo) query;
+  debug_storage_health : (nat64) -> (StorageHealth) query;
+  debug_token_state : (nat, nat64) -> (TokenDebugState) query;
   finalize_upload : (Args_6) -> (Result_5);
   get_all_storage_subcanisters : () -> (vec principal) query;
   get_all_uploads : (opt nat, opt nat) -> (Result_6) query;
   get_upload_status : (text) -> (Result_7) query;
-  get_user_permissions : (Args_7) -> (Result_8) query;
-  grant_permission : (Args_8) -> (Result_9);
-  has_permission : (Args_9) -> (Result_10) query;
+  get_user_permissions : (Args_8) -> (Result_8) query;
+  grant_permission : (Args_9) -> (Result_9);
+  has_permission : (Args_10) -> (Result_10) query;
   icrc10_supported_standards : () -> (vec SupportedStandard) query;
   icrc21_canister_call_consent_message : (ConsentMessageRequest) -> (
       Result_11,
@@ -446,7 +562,7 @@ service : (Args_13) -> {
   icrc3_supported_block_types : (null) -> (vec SupportedBlockType) query;
   icrc7_atomic_batch_transfers : () -> (opt bool) query;
   icrc7_balance_of : (vec Account) -> (vec nat) query;
-  icrc7_collection_metadata : () -> (vec record { text; ICRC3Value }) query;
+  icrc7_collection_metadata : () -> (vec record { text; ICRC3Value_1 }) query;
   icrc7_default_take_value : () -> (opt nat) query;
   icrc7_description : () -> (opt text) query;
   icrc7_logo : () -> (opt text) query;
@@ -460,7 +576,7 @@ service : (Args_13) -> {
   icrc7_supply_cap : () -> (opt nat) query;
   icrc7_symbol : () -> (text) query;
   icrc7_token_metadata : (vec nat) -> (
-      vec opt vec record { text; ICRC3Value },
+      vec opt vec record { text; ICRC3Value_1 },
     ) query;
   icrc7_tokens : (opt nat, opt nat) -> (vec nat) query;
   icrc7_tokens_of : (Account, opt nat, opt nat) -> (vec nat) query;
@@ -468,9 +584,9 @@ service : (Args_13) -> {
   icrc7_transfer : (vec TransferArg) -> (vec opt Result_17);
   icrc7_tx_window : () -> (opt nat) query;
   init_upload : (Args_2) -> (Result_18);
-  mint : (Args_10) -> (Result_19);
-  revoke_permission : (Args_9) -> (Result_9);
+  mint : (Args_11) -> (Result_19);
+  revoke_permission : (Args_10) -> (Result_9);
   store_chunk : (Args_4) -> (Result_20);
-  update_collection_metadata : (Args_11) -> (Result_21);
-  update_nft_metadata : (Args_12) -> (Result_22);
+  update_collection_metadata : (Args_12) -> (Result_21);
+  update_nft_metadata : (Args_13) -> (Result_22);
 }

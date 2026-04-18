@@ -1,5 +1,10 @@
 {
   "canisters": {
+    "test_canister": {
+      "type": "rust",
+      "package": "test_canister",
+      "candid": "test_canister/test_canister.did"
+    },
     "storage": {
       "build": ["./scripts/build.sh ./src storage_canister"],
       "candid": "src/storage_canister/wasm/can.did",
