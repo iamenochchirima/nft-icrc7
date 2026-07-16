@@ -864,6 +864,7 @@ dependencies = [
  "candid",
  "canfund",
  "futures",
+ "hex",
  "ic-asset-certification",
  "ic-cdk",
  "ic-cdk-macros",

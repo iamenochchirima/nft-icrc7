@@ -31,7 +31,9 @@ pub struct RuntimeState {
     pub env: CanisterEnv,
     pub data: Data,
     pub principal_guards: BTreeSet<Principal>,
-    pub sliding_window_guards: HashMap<candid::Nat, Vec<TimestampNanos>>, // per token id
+    /// Kept solely to deserialize pre-throttle upgrades. It is cleared in
+    /// post_upgrade and is no longer mutated by public transfer methods.
+    pub sliding_window_guards: HashMap<candid::Nat, Vec<TimestampNanos>>,
     pub internal_filestorage: InternalFilestorage,
 }
 

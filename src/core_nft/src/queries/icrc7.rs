@@ -175,6 +175,13 @@ pub fn icrc7_permitted_drift() -> icrc7::icrc7_permitted_drift::Response {
     read_state(|state| state.data.permitted_drift.clone())
 }
 
+/// Returns the per-token transfer protection state. This is informational only;
+/// enforcement remains inside both ICRC transfer update methods.
+#[query]
+pub fn transfer_throttle_status(token_id: Nat) -> crate::transfer_throttle::TransferThrottleStatus {
+    crate::transfer_throttle::status(&token_id, ic_cdk::api::time())
+}
+
 #[query]
 pub fn icrc7_token_metadata(
     token_ids: icrc7::icrc7_token_metadata::Args,

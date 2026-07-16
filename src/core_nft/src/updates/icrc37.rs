@@ -18,7 +18,7 @@ use ic_cdk_macros::update;
 use icrc_ledger_types::icrc1::account::Account;
 use std::collections::HashMap;
 
-use crate::guards::guard_sliding_window;
+use crate::transfer_throttle::{check_transfer_allowed, record_successful_transfer};
 
 fn verify_approval_timing(created_at_time: u64, current_time: u64) -> Result<(), (bool, u64)> {
     let permited_drift = read_state(|state| state.data.permitted_drift.clone())
@@ -72,16 +72,6 @@ fn approve_token(
     use icrc37_approve_tokens::{ApproveTokenError, ApproveTokenResult};
 
     trace(&format!("approve_token: {:?}", arg));
-
-    match guard_sliding_window(arg.token_id.clone()) {
-        Ok(()) => {}
-        Err(e) => {
-            return ApproveTokenResult::Err(ApproveTokenError::GenericError {
-                error_code: Nat::from(0u64),
-                message: e,
-            });
-        }
-    }
 
     match verify_approval_timing(arg.approval_info.created_at_time, current_time) {
         Err((true, ledger_time)) => {
@@ -247,17 +237,6 @@ fn approve_collection(
 ) -> icrc37_approve_collection::ApproveCollectionResult {
     use icrc37_approve_collection::{ApproveCollectionError, ApproveCollectionResult};
 
-    match guard_sliding_window(candid::Nat::from(0u64)) {
-        // we consider the collection as a token with id 0
-        Ok(()) => {}
-        Err(e) => {
-            return ApproveCollectionResult::Err(ApproveCollectionError::GenericError {
-                error_code: Nat::from(0u64),
-                message: e,
-            });
-        }
-    }
-
     match verify_approval_timing(arg.approval_info.created_at_time, current_time) {
         Err((true, ledger_time)) => {
             return ApproveCollectionResult::Err(ApproveCollectionError::CreatedInFuture {
@@ -393,18 +372,6 @@ fn icrc37_revoke_token_approvals(
     args: icrc37_revoke_token_approvals::Args,
 ) -> icrc37_revoke_token_approvals::Response {
     let caller = ic_cdk::api::msg_caller();
-
-    match guard_sliding_window(args[0].token_id.clone()) {
-        Err(e) => {
-            return icrc37_revoke_token_approvals::Response::Err(
-                icrc37_revoke_token_approvals::RevokeTokenApprovalError::GenericError {
-                    error_code: Nat::from(0u64),
-                    message: e,
-                },
-            );
-        }
-        Ok(()) => {}
-    }
 
     // here we check the max revoke approvals,
     // note that if spender is not provided, we will revoke all approvals for the token
@@ -566,19 +533,6 @@ fn revoke_collection_approvals(
         RevokeCollectionApprovalError, RevokeCollectionApprovalResult,
     };
 
-    match guard_sliding_window(candid::Nat::from(0u64)) {
-        // we consider the collection as a token with id 0
-        Ok(()) => {}
-        Err(e) => {
-            return RevokeCollectionApprovalResult::Err(
-                RevokeCollectionApprovalError::GenericError {
-                    error_code: Nat::from(0u64),
-                    message: e,
-                },
-            );
-        }
-    }
-
     if let Some(created_at_time) = arg.created_at_time {
         match verify_approval_timing(created_at_time, current_time) {
             Err((true, ledger_time)) => {
@@ -676,16 +630,6 @@ fn transfer_from(
     current_time: u64,
 ) -> icrc37_transfer_from::TransferFromResult {
     use icrc37_transfer_from::{TransferFromError, TransferFromResult};
-
-    match guard_sliding_window(arg.token_id.clone()) {
-        Ok(()) => {}
-        Err(e) => {
-            return TransferFromResult::Err(TransferFromError::GenericError {
-                error_code: Nat::from(0u64),
-                message: e,
-            });
-        }
-    }
 
     if let Some(created_at_time) = arg.created_at_time {
         match verify_approval_timing(created_at_time, current_time) {
@@ -800,6 +744,13 @@ fn transfer_from(
         },
     );
 
+    if let Err(error) = check_transfer_allowed(&arg.token_id, current_time) {
+        return TransferFromResult::Err(TransferFromError::GenericError {
+            error_code: Nat::from(error.error_code()),
+            message: error.message(),
+        });
+    }
+
     let index = match icrc3_add_transaction(transaction) {
         Ok(index) => index,
         Err(e) => match e {
@@ -858,6 +809,8 @@ fn transfer_from(
             collection_approvals.remove(&WrappedAccount::from(arg.from.clone()));
         });
     }
+
+    record_successful_transfer(&arg.token_id, current_time);
 
     TransferFromResult::Ok(Nat::from(index))
 }

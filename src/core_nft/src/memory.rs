@@ -17,6 +17,7 @@ use ic_stable_structures::{
 // - 4: Collection approvals (ICRC37)
 // - 5: NFT Metadata
 // - 6: ICRC3 block log data
+// - 7: Per-token transfer throttle state
 // =============================================================================
 
 const UPGRADES: MemoryId = MemoryId::new(2);
@@ -25,6 +26,7 @@ pub const TOKEN_APPROVALS: MemoryId = MemoryId::new(3);
 pub const COLLECTION_APPROVALS: MemoryId = MemoryId::new(4);
 pub const METADATA: MemoryId = MemoryId::new(5);
 pub const ICRC3_BLOCK_LOG: MemoryId = MemoryId::new(6);
+pub const TRANSFER_THROTTLES: MemoryId = MemoryId::new(7);
 
 pub type VM = VirtualMemory<DefaultMemoryImpl>;
 
@@ -55,6 +57,10 @@ pub fn get_metadata_memory() -> VM {
 /// ICRC3 uses our shared MemoryManager instead of creating its own.
 pub fn get_icrc3_memory() -> VM {
     get_memory(ICRC3_BLOCK_LOG)
+}
+
+pub fn get_transfer_throttles_memory() -> VM {
+    get_memory(TRANSFER_THROTTLES)
 }
 
 fn get_memory(id: MemoryId) -> VM {

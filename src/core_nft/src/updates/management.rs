@@ -20,6 +20,7 @@ use bity_ic_icrc3::transaction::{ICRC7Transaction, ICRC7TransactionData};
 use bity_ic_storage_canister_api::types::storage::UploadState;
 pub use candid::{Nat, Principal};
 pub use ic_cdk::call::RejectCode;
+use ic_cdk::management_canister::{canister_status, CanisterStatusArgs, CanisterStatusResult, CanisterStatusType};
 use ic_cdk_macros::{query, update};
 use icrc_ledger_types::icrc::generic_value::ICRC3Value as Icrc3Value;
 use icrc_ledger_types::icrc1::account::Account;
@@ -39,8 +40,32 @@ fn build_asset_url(canister_id: Principal, path: &str) -> String {
     if is_prod {
         format!("https://{canister_id}.raw.icp0.io{path}")
     } else {
-        format!("http://{canister_id}.raw.localhost:4943{path}")
+        format!("http://{canister_id}.localhost:4943{path}")
     }
+}
+
+fn nat_to_u128(value: &Nat) -> Option<u128> {
+    value.0.to_string().parse::<u128>().ok()
+}
+
+fn calc_freezing_balance(freezing_threshold: u128, idle_cycles_burned_per_day: u128) -> u128 {
+    idle_cycles_burned_per_day.saturating_mul(freezing_threshold) / 86_400
+}
+
+fn canister_status_label(status: &CanisterStatusType) -> String {
+    match status {
+        CanisterStatusType::Running => "running".to_string(),
+        CanisterStatusType::Stopping => "stopping".to_string(),
+        CanisterStatusType::Stopped => "stopped".to_string(),
+    }
+}
+
+async fn fetch_storage_canister_status(
+    canister_id: Principal,
+) -> Result<CanisterStatusResult, String> {
+    canister_status(&CanisterStatusArgs { canister_id })
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[update(guard = "caller_has_update_collection_metadata_permission")]
@@ -511,7 +536,7 @@ pub async fn store_chunk(data: store_chunk::Args) -> store_chunk::Response {
     let _guard_principal = GuardManagement::new(caller)
         .map_err(|_| store_chunk::StoreChunkError::ConcurrentManagementCall)?;
 
-    let (init_timestamp, canister_id, file_path) =
+    let (init_timestamp, canister_id, file_path): (u64, Principal, String) =
         match read_state(|state| state.internal_filestorage.get(&data.file_path).cloned()) {
             Some(data) => match data.state {
                 UploadState::Init => (data.init_timestamp, data.canister, data.path),
@@ -571,7 +596,7 @@ pub async fn finalize_upload(data: finalize_upload::Args) -> finalize_upload::Re
     let _guard_principal = GuardManagement::new(caller)
         .map_err(|_| finalize_upload::FinalizeUploadError::ConcurrentManagementCall)?;
 
-    let (init_timestamp, media_path, canister_id) =
+    let (init_timestamp, media_path, canister_id): (u64, String, Principal) =
         match read_state(|state| state.internal_filestorage.get(&data.file_path).cloned()) {
             Some(data) => match data.state {
                 UploadState::Init => {
@@ -644,6 +669,151 @@ pub async fn finalize_upload(data: finalize_upload::Args) -> finalize_upload::Re
 #[query(guard = "caller_has_manage_authorities_permission")]
 pub fn get_all_storage_subcanisters() -> Vec<candid::Principal> {
     read_state(|state| state.data.sub_canister_manager.list_canisters_ids())
+}
+
+#[update(guard = "caller_has_manage_authorities_permission")]
+pub async fn get_collection_canister_status() -> management::get_collection_canister_status::Response {
+    let caller = ic_cdk::api::msg_caller();
+    let _guard_principal = GuardManagement::new(caller).map_err(|_| {
+        management::get_collection_canister_status::GetCollectionCanisterStatusError::ConcurrentManagementCall
+    })?;
+
+    let canister_id = ic_cdk::api::canister_self();
+    let runtime_metrics = read_state(|state| state.metrics().canister_info);
+    let status = fetch_storage_canister_status(canister_id)
+        .await
+        .map_err(management::get_collection_canister_status::GetCollectionCanisterStatusError::StatusFetchFailed)?;
+
+    let total_cycles_u128 = nat_to_u128(&status.cycles).unwrap_or_default();
+    let freezing_threshold_u128 = nat_to_u128(&status.settings.freezing_threshold).unwrap_or_default();
+    let idle_cycles_burned_per_day_u128 =
+        nat_to_u128(&status.idle_cycles_burned_per_day).unwrap_or_default();
+    let available_cycles = Nat::from(total_cycles_u128.saturating_sub(calc_freezing_balance(
+        freezing_threshold_u128,
+        idle_cycles_burned_per_day_u128,
+    )));
+
+    Ok(management::get_collection_canister_status::CollectionCanisterStatusInfo {
+        canister_id,
+        runtime_info: management::get_collection_canister_status::CollectionRuntimeInfo {
+            now: runtime_metrics.now,
+            test_mode: runtime_metrics.test_mode,
+            version: runtime_metrics.version,
+            commit_hash: runtime_metrics.commit_hash,
+            memory_used: serde_json::to_string(&runtime_metrics.memory_used)
+                .unwrap_or_else(|_| "{\"heap\":0,\"stable\":0}".to_string()),
+            cycles_balance: runtime_metrics.cycles_balance,
+        },
+        status: canister_status_label(&status.status),
+        total_cycles: status.cycles,
+        available_cycles,
+        reserved_cycles: status.reserved_cycles,
+        freezing_threshold: status.settings.freezing_threshold,
+        idle_cycles_burned_per_day: status.idle_cycles_burned_per_day,
+        memory_size: status.memory_size,
+        module_hash_hex: status.module_hash.map(hex::encode),
+        controllers: status.settings.controllers,
+    })
+}
+
+#[update(guard = "caller_has_manage_authorities_permission")]
+pub async fn get_storage_canister_balances() -> management::get_storage_canister_balances::Response {
+    let caller = ic_cdk::api::msg_caller();
+    let _guard_principal = GuardManagement::new(caller).map_err(|_| {
+        management::get_storage_canister_balances::GetStorageCanisterBalancesError::ConcurrentManagementCall
+    })?;
+
+    let canister_ids = read_state(|state| state.data.sub_canister_manager.list_canisters_ids());
+    let mut balances = Vec::with_capacity(canister_ids.len());
+
+    for canister_id in canister_ids {
+        match fetch_storage_canister_status(canister_id).await {
+            Ok(status) => {
+                let total_cycles_u128 = nat_to_u128(&status.cycles);
+                let freezing_threshold_u128 = nat_to_u128(&status.settings.freezing_threshold);
+                let idle_cycles_burned_per_day_u128 = nat_to_u128(&status.idle_cycles_burned_per_day);
+
+                let available_cycles = match (
+                    total_cycles_u128,
+                    freezing_threshold_u128,
+                    idle_cycles_burned_per_day_u128,
+                ) {
+                    (Some(total), Some(freezing_threshold), Some(idle_cycles_burned_per_day)) => Some(
+                        Nat::from(
+                            total.saturating_sub(calc_freezing_balance(
+                                freezing_threshold,
+                                idle_cycles_burned_per_day,
+                            )),
+                        ),
+                    ),
+                    _ => None,
+                };
+
+                balances.push(management::get_storage_canister_balances::StorageCanisterBalanceInfo {
+                    canister_id,
+                    total_cycles: Some(status.cycles),
+                    available_cycles,
+                    reserved_cycles: Some(status.reserved_cycles),
+                    freezing_threshold: Some(status.settings.freezing_threshold),
+                    idle_cycles_burned_per_day: Some(status.idle_cycles_burned_per_day),
+                    error: None,
+                });
+            }
+            Err(error) => {
+                balances.push(management::get_storage_canister_balances::StorageCanisterBalanceInfo {
+                    canister_id,
+                    total_cycles: None,
+                    available_cycles: None,
+                    reserved_cycles: None,
+                    freezing_threshold: None,
+                    idle_cycles_burned_per_day: None,
+                    error: Some(error),
+                });
+            }
+        }
+    }
+
+    Ok(balances)
+}
+
+#[update(guard = "caller_has_manage_authorities_permission")]
+pub async fn get_storage_canister_statuses() -> management::get_storage_canister_statuses::Response {
+    let caller = ic_cdk::api::msg_caller();
+    let _guard_principal = GuardManagement::new(caller).map_err(|_| {
+        management::get_storage_canister_statuses::GetStorageCanisterStatusesError::ConcurrentManagementCall
+    })?;
+
+    let canister_ids = read_state(|state| state.data.sub_canister_manager.list_canisters_ids());
+    let mut statuses = Vec::with_capacity(canister_ids.len());
+
+    for canister_id in canister_ids {
+        match fetch_storage_canister_status(canister_id).await {
+            Ok(status) => {
+                statuses.push(management::get_storage_canister_statuses::StorageCanisterStatusInfo {
+                    canister_id,
+                    status: Some(canister_status_label(&status.status)),
+                    memory_size: Some(status.memory_size),
+                    module_hash_hex: status.module_hash.map(hex::encode),
+                    reserved_cycles: Some(status.reserved_cycles),
+                    freezing_threshold: Some(status.settings.freezing_threshold),
+                    error: None,
+                });
+            }
+            Err(error) => {
+                statuses.push(management::get_storage_canister_statuses::StorageCanisterStatusInfo {
+                    canister_id,
+                    status: None,
+                    memory_size: None,
+                    module_hash_hex: None,
+                    reserved_cycles: None,
+                    freezing_threshold: None,
+                    error: Some(error),
+                });
+            }
+        }
+    }
+
+    Ok(statuses)
 }
 
 #[query(guard = "caller_has_read_uploads_permission")]

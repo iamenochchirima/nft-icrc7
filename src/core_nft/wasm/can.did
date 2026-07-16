@@ -104,6 +104,27 @@ type BurnNftError = variant {
   NotTokenOwner;
 };
 type CancelUploadError = variant { UploadNotInitialized };
+type CollectionCanisterStatusInfo = record {
+  status : text;
+  freezing_threshold : nat;
+  controllers : vec principal;
+  available_cycles : nat;
+  memory_size : nat;
+  canister_id : principal;
+  idle_cycles_burned_per_day : nat;
+  module_hash_hex : opt text;
+  total_cycles : nat;
+  runtime_info : CollectionRuntimeInfo;
+  reserved_cycles : nat;
+};
+type CollectionRuntimeInfo = record {
+  now : nat64;
+  cycles_balance : nat64;
+  test_mode : bool;
+  memory_used : text;
+  version : BuildVersion;
+  commit_hash : text;
+};
 type ConsentInfo = record {
   metadata : ConsentMessageMetadata;
   consent_message : ConsentMessage;
@@ -166,6 +187,11 @@ type GetBlocksResult_1 = record {
   blocks : vec BlockWithId;
   archived_blocks : vec ArchivedBlocks;
 };
+type GetCollectionCanisterStatusError = variant {
+  ConcurrentManagementCall;
+  StatusFetchFailed : text;
+};
+type GetStorageCanisterBalancesError = variant { ConcurrentManagementCall };
 type GetUploadStatusError = variant {
   StorageCanisterError : text;
   UploadNotFound;
@@ -314,35 +340,38 @@ type Response_2 = record {
 };
 type Result = variant { Ok : text; Err : FinalizeUploadError };
 type Result_1 = variant { Ok; Err : InitUploadError };
-type Result_10 = variant { Ok : bool; Err : HasPermissionError };
-type Result_11 = variant { Ok : ConsentInfo; Err : Icrc21Error };
-type Result_12 = variant {
+type Result_10 = variant { Ok : UploadState; Err : GetUploadStatusError };
+type Result_11 = variant { Ok : vec Permission; Err : GetUserPermissionsError };
+type Result_12 = variant { Ok; Err : GrantPermissionError };
+type Result_13 = variant { Ok : bool; Err : HasPermissionError };
+type Result_14 = variant { Ok : ConsentInfo; Err : Icrc21Error };
+type Result_15 = variant {
   Ok : vec opt ApproveCollectionResult;
   Err : ApproveCollectionError;
 };
-type Result_13 = variant {
+type Result_16 = variant {
   Ok : vec opt ApproveTokenResult;
   Err : ApproveTokenError;
 };
-type Result_14 = variant {
+type Result_17 = variant {
   Ok : vec opt RevokeCollectionApprovalResult;
   Err : RevokeCollectionApprovalError;
 };
-type Result_15 = variant {
+type Result_18 = variant {
   Ok : vec opt RevokeTokenApprovalResponse;
   Err : RevokeTokenApprovalError;
 };
-type Result_16 = variant {
+type Result_19 = variant {
   Ok : vec opt TransferFromResult;
   Err : TransferFromError;
 };
-type Result_17 = variant { Ok : nat; Err : TransferError };
-type Result_18 = variant { Ok : record {}; Err : InitUploadError };
-type Result_19 = variant { Ok : nat; Err : MintError };
 type Result_2 = variant { Ok; Err : StoreChunkError };
-type Result_20 = variant { Ok : record {}; Err : StoreChunkError };
-type Result_21 = variant { Ok; Err : UpdateCollectionMetadataError };
-type Result_22 = variant { Ok : nat; Err : UpdateNftMetadataError };
+type Result_20 = variant { Ok : nat; Err : TransferError };
+type Result_21 = variant { Ok : record {}; Err : InitUploadError };
+type Result_22 = variant { Ok : nat; Err : MintError };
+type Result_23 = variant { Ok : record {}; Err : StoreChunkError };
+type Result_24 = variant { Ok; Err : UpdateCollectionMetadataError };
+type Result_25 = variant { Ok : nat; Err : UpdateNftMetadataError };
 type Result_3 = variant { Ok; Err : BurnNftError };
 type Result_4 = variant { Ok : record {}; Err : CancelUploadError };
 type Result_5 = variant { Ok : FinalizeUploadResp; Err : FinalizeUploadError };
@@ -350,9 +379,18 @@ type Result_6 = variant {
   Ok : vec record { text; UploadState };
   Err : GetAllUploadsError;
 };
-type Result_7 = variant { Ok : UploadState; Err : GetUploadStatusError };
-type Result_8 = variant { Ok : vec Permission; Err : GetUserPermissionsError };
-type Result_9 = variant { Ok; Err : GrantPermissionError };
+type Result_7 = variant {
+  Ok : CollectionCanisterStatusInfo;
+  Err : GetCollectionCanisterStatusError;
+};
+type Result_8 = variant {
+  Ok : vec StorageCanisterBalanceInfo;
+  Err : GetStorageCanisterBalancesError;
+};
+type Result_9 = variant {
+  Ok : vec StorageCanisterStatusInfo;
+  Err : GetStorageCanisterBalancesError;
+};
 type RevokeCollectionApprovalArg = record {
   memo : opt blob;
   from_subaccount : opt blob;
@@ -394,6 +432,24 @@ type StableMemoryInfo = record {
   total_pages : nat64;
   total_bytes : nat64;
   total_buckets_approx : nat64;
+};
+type StorageCanisterBalanceInfo = record {
+  freezing_threshold : opt nat;
+  available_cycles : opt nat;
+  canister_id : principal;
+  error : opt text;
+  idle_cycles_burned_per_day : opt nat;
+  total_cycles : opt nat;
+  reserved_cycles : opt nat;
+};
+type StorageCanisterStatusInfo = record {
+  status : opt text;
+  freezing_threshold : opt nat;
+  memory_size : opt nat;
+  canister_id : principal;
+  error : opt text;
+  module_hash_hex : opt text;
+  reserved_cycles : opt nat;
 };
 type StorageHealth = record {
   metadata : MapHealth;
@@ -461,6 +517,10 @@ type TransferFromError = variant {
   TooOld;
 };
 type TransferFromResult = variant { Ok : nat; Err : TransferFromError };
+type TransferThrottleStatus = record {
+  cooldown_until_ns : opt nat64;
+  successful_transfers : nat16;
+};
 type UpdateCollectionMetadataError = variant {
   StorageCanisterError : text;
   ConcurrentManagementCall;
@@ -529,16 +589,19 @@ service : (Args_14) -> {
   finalize_upload : (Args_6) -> (Result_5);
   get_all_storage_subcanisters : () -> (vec principal) query;
   get_all_uploads : (opt nat, opt nat) -> (Result_6) query;
-  get_upload_status : (text) -> (Result_7) query;
-  get_user_permissions : (Args_8) -> (Result_8) query;
-  grant_permission : (Args_9) -> (Result_9);
-  has_permission : (Args_10) -> (Result_10) query;
+  get_collection_canister_status : () -> (Result_7);
+  get_storage_canister_balances : () -> (Result_8);
+  get_storage_canister_statuses : () -> (Result_9);
+  get_upload_status : (text) -> (Result_10) query;
+  get_user_permissions : (Args_8) -> (Result_11) query;
+  grant_permission : (Args_9) -> (Result_12);
+  has_permission : (Args_10) -> (Result_13) query;
   icrc10_supported_standards : () -> (vec SupportedStandard) query;
   icrc21_canister_call_consent_message : (ConsentMessageRequest) -> (
-      Result_11,
+      Result_14,
     ) query;
-  icrc37_approve_collection : (vec ApproveCollectionArg) -> (Result_12);
-  icrc37_approve_tokens : (vec ApproveTokenArg) -> (Result_13);
+  icrc37_approve_collection : (vec ApproveCollectionArg) -> (Result_15);
+  icrc37_approve_tokens : (vec ApproveTokenArg) -> (Result_16);
   icrc37_get_collection_approvals : (
       Account,
       opt ApproveCollectionArg,
@@ -551,10 +614,10 @@ service : (Args_14) -> {
   icrc37_max_approvals_per_token_or_collection : () -> (opt nat) query;
   icrc37_max_revoke_approvals : () -> (opt nat) query;
   icrc37_revoke_collection_approvals : (vec RevokeCollectionApprovalArg) -> (
-      Result_14,
+      Result_17,
     );
-  icrc37_revoke_token_approvals : (vec RevokeTokenApprovalArg) -> (Result_15);
-  icrc37_transfer_from : (vec TransferFromArg) -> (Result_16);
+  icrc37_revoke_token_approvals : (vec RevokeTokenApprovalArg) -> (Result_18);
+  icrc37_transfer_from : (vec TransferFromArg) -> (Result_19);
   icrc3_get_archives : (null) -> (vec ICRC3ArchiveInfo) query;
   icrc3_get_blocks : (vec GetBlocksRequest) -> (GetBlocksResult_1) query;
   icrc3_get_properties : (null) -> (ICRC3Properties) query;
@@ -581,12 +644,15 @@ service : (Args_14) -> {
   icrc7_tokens : (opt nat, opt nat) -> (vec nat) query;
   icrc7_tokens_of : (Account, opt nat, opt nat) -> (vec nat) query;
   icrc7_total_supply : () -> (nat) query;
-  icrc7_transfer : (vec TransferArg) -> (vec opt Result_17);
+  icrc7_transfer : (vec TransferArg) -> (vec opt Result_20);
   icrc7_tx_window : () -> (opt nat) query;
-  init_upload : (Args_2) -> (Result_18);
-  mint : (Args_11) -> (Result_19);
-  revoke_permission : (Args_10) -> (Result_9);
-  store_chunk : (Args_4) -> (Result_20);
-  update_collection_metadata : (Args_12) -> (Result_21);
-  update_nft_metadata : (Args_13) -> (Result_22);
+  init_upload : (Args_2) -> (Result_21);
+  mint : (Args_11) -> (Result_22);
+  revoke_permission : (Args_10) -> (Result_12);
+  store_chunk : (Args_4) -> (Result_23);
+  // Returns the per-token transfer protection state. This is informational only;
+  // enforcement remains inside both ICRC transfer update methods.
+  transfer_throttle_status : (nat) -> (TransferThrottleStatus) query;
+  update_collection_metadata : (Args_12) -> (Result_24);
+  update_nft_metadata : (Args_13) -> (Result_25);
 }

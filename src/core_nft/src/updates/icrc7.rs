@@ -1,5 +1,5 @@
-use crate::utils::check_memo;
-use crate::utils::trace;
+use crate::transfer_throttle::{check_transfer_allowed, record_successful_transfer};
+use crate::utils::{check_memo, trace};
 use crate::{
     state::{icrc3_add_transaction, mutate_state, read_state},
     types::icrc7,
@@ -7,17 +7,7 @@ use crate::{
 use bity_ic_icrc3::transaction::{ICRC7Transaction, ICRC7TransactionData};
 use candid::{Nat, Principal};
 use ic_cdk_macros::update;
-
-use crate::guards::guard_sliding_window;
-
 fn transfer_nft(arg: &icrc7::TransferArg) -> Result<Nat, icrc7::icrc7_transfer::TransferError> {
-    guard_sliding_window(arg.token_id.clone()).map_err(|e| {
-        icrc7::icrc7_transfer::TransferError::GenericError {
-            error_code: Nat::from(0u64),
-            message: e,
-        }
-    })?;
-
     let mut nft = mutate_state(|state| state.data.tokens_list.get(&arg.token_id).cloned())
         .ok_or(icrc7::icrc7_transfer::TransferError::NonExistingTokenId)?;
 
@@ -80,6 +70,13 @@ fn transfer_nft(arg: &icrc7::TransferArg) -> Result<Nat, icrc7::icrc7_transfer::
 
     let previous_owner = nft.token_owner.clone();
 
+    check_transfer_allowed(&arg.token_id, current_time).map_err(|error| {
+        icrc7::icrc7_transfer::TransferError::GenericError {
+            error_code: Nat::from(error.error_code()),
+            message: error.message(),
+        }
+    })?;
+
     // this is safe to do this as they is no await in the method, meaning state is committed at the end of the icrc7_transfer method.
     match icrc3_add_transaction(transaction.clone()) {
         Ok(transaction_id) => {
@@ -99,6 +96,7 @@ fn transfer_nft(arg: &icrc7::TransferArg) -> Result<Nat, icrc7::icrc7_transfer::
                     .or_insert(vec![])
                     .retain(|id| *id != nft.token_id.clone());
             });
+            record_successful_transfer(&arg.token_id, current_time);
             Ok(Nat::from(transaction_id))
         }
         Err(e) => {

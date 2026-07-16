@@ -87,6 +87,88 @@ pub mod get_all_uploads {
     pub type Response = Result<HashMap<String, UploadState>, GetAllUploadsError>;
 }
 
+pub mod get_storage_canister_balances {
+    use super::*;
+
+    #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+    pub struct StorageCanisterBalanceInfo {
+        pub canister_id: Principal,
+        pub total_cycles: Option<Nat>,
+        pub available_cycles: Option<Nat>,
+        pub reserved_cycles: Option<Nat>,
+        pub freezing_threshold: Option<Nat>,
+        pub idle_cycles_burned_per_day: Option<Nat>,
+        pub error: Option<String>,
+    }
+
+    #[derive(Serialize, Deserialize, CandidType, Debug)]
+    pub enum GetStorageCanisterBalancesError {
+        ConcurrentManagementCall,
+    }
+
+    pub type Response = Result<Vec<StorageCanisterBalanceInfo>, GetStorageCanisterBalancesError>;
+}
+
+pub mod get_storage_canister_statuses {
+    use super::*;
+
+    #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+    pub struct StorageCanisterStatusInfo {
+        pub canister_id: Principal,
+        pub status: Option<String>,
+        pub memory_size: Option<Nat>,
+        pub module_hash_hex: Option<String>,
+        pub reserved_cycles: Option<Nat>,
+        pub freezing_threshold: Option<Nat>,
+        pub error: Option<String>,
+    }
+
+    #[derive(Serialize, Deserialize, CandidType, Debug)]
+    pub enum GetStorageCanisterStatusesError {
+        ConcurrentManagementCall,
+    }
+
+    pub type Response = Result<Vec<StorageCanisterStatusInfo>, GetStorageCanisterStatusesError>;
+}
+
+pub mod get_collection_canister_status {
+    use super::*;
+    use bity_ic_types::{BuildVersion, Cycles, TimestampMillis};
+
+    #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+    pub struct CollectionRuntimeInfo {
+        pub now: TimestampMillis,
+        pub test_mode: bool,
+        pub version: BuildVersion,
+        pub commit_hash: String,
+        pub memory_used: String,
+        pub cycles_balance: Cycles,
+    }
+
+    #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+    pub struct CollectionCanisterStatusInfo {
+        pub canister_id: Principal,
+        pub runtime_info: CollectionRuntimeInfo,
+        pub status: String,
+        pub total_cycles: Nat,
+        pub available_cycles: Nat,
+        pub reserved_cycles: Nat,
+        pub freezing_threshold: Nat,
+        pub idle_cycles_burned_per_day: Nat,
+        pub memory_size: Nat,
+        pub module_hash_hex: Option<String>,
+        pub controllers: Vec<Principal>,
+    }
+
+    #[derive(Serialize, Deserialize, CandidType, Debug)]
+    pub enum GetCollectionCanisterStatusError {
+        ConcurrentManagementCall,
+        StatusFetchFailed(String),
+    }
+
+    pub type Response = Result<CollectionCanisterStatusInfo, GetCollectionCanisterStatusError>;
+}
+
 pub mod debug_metadata_snapshot {
     use super::*;
 

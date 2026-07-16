@@ -40,6 +40,10 @@ fn post_upgrade(args: Args) {
                 ::deserialize(reader)
                 .unwrap();
 
+            // The old limiter persisted every attempted token ID. Retain the field
+            // only for backwards-compatible decoding, then discard stale contents.
+            state.sliding_window_guards.clear();
+
             // uncomment these lines if you want to do an upgrade with migration
             // let (runtime_state_v0, logs, traces): (
             //     RuntimeStateV0,
